@@ -241,7 +241,13 @@ router.patch('/:id/verify', authenticate, requireRole('admin','verifier','super_
   // Update applicant status
   if (action === 'verify') {
     await pool.query(
-      "UPDATE applicants SET status='Payment Verified' WHERE id=?", [pmt.applicant_id]
+      `UPDATE applicants
+       SET status = CASE
+         WHEN status = 'Admitted' THEN 'Admitted'
+         ELSE 'Payment Verified'
+       END
+       WHERE id=?`,
+      [pmt.applicant_id]
     );
     await sendEmail(pmt.guardian_email, 'payment_verified', {
       form_number: pmt.form_number,

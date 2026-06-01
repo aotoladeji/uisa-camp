@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronLeft, Search, CheckCircle, Clock, XCircle, AlertCircle, ArrowRight } from 'lucide-react';
+import { ChevronLeft, Search, CheckCircle, Clock, XCircle, AlertCircle, ArrowRight, FileText, Printer } from 'lucide-react';
 import api from '../utils/api';
 import BrandLogo from '../components/BrandLogo';
 
@@ -59,6 +59,109 @@ export default function StatusPage() {
   const StatusIcon = cfg?.icon;
   const timelineStep = result ? getTimelineStep(result.status) : 0;
   const isRejected = result?.status === 'Rejected';
+
+  const buildAdmissionLetterHtml = (app) => {
+    const fullName = `${app.first_name || ''} ${app.surname || ''}`.trim();
+    const generatedDate = new Date().toLocaleDateString('en-GB');
+    const sport = app.sport_selection || 'N/A';
+    const formNumber = app.form_number || 'N/A';
+    const category = app.age_category || 'N/A';
+
+    return `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Admission Letter - ${formNumber}</title>
+    <style>
+      body { font-family: Georgia, 'Times New Roman', serif; margin: 0; color: #111827; background: #ffffff; }
+      .page { max-width: 860px; margin: 0 auto; padding: 42px 48px 56px; }
+      .head { border-bottom: 2px solid #0B2E63; padding-bottom: 14px; margin-bottom: 24px; }
+      .camp { font-family: Arial, sans-serif; color: #0B2E63; font-weight: 800; font-size: 22px; letter-spacing: .3px; }
+      .meta { margin-top: 6px; font-family: Arial, sans-serif; color: #334155; font-size: 13px; }
+      h1 { font-family: Arial, sans-serif; color: #0B2E63; font-size: 24px; margin: 0 0 14px; }
+      p { font-size: 16px; line-height: 1.6; margin: 0 0 14px; }
+      .info { margin: 18px 0 22px; border: 1px solid #D1D5DB; border-radius: 8px; overflow: hidden; }
+      .row { display: grid; grid-template-columns: 220px 1fr; }
+      .row > div { padding: 11px 14px; border-bottom: 1px solid #E5E7EB; font-size: 14px; }
+      .row:last-child > div { border-bottom: 0; }
+      .label { background: #F8FAFC; font-family: Arial, sans-serif; font-weight: 700; color: #1F2937; }
+      .value { font-family: Arial, sans-serif; color: #111827; }
+      .sign { margin-top: 40px; }
+      .line { width: 230px; border-top: 1px solid #111827; margin-top: 40px; }
+      .foot { margin-top: 24px; font-size: 12px; color: #6B7280; font-family: Arial, sans-serif; }
+      @media print { .page { padding: 24px 30px; } }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="head">
+        <div class="camp">UNIVERSITY OF IBADAN SPORTS ACADEMY</div>
+        <div class="meta">Official Admission Letter · 2026 Summer Sports Camp</div>
+      </div>
+
+      <h1>Offer of Provisional Admission</h1>
+
+      <p>Date: <strong>${generatedDate}</strong></p>
+      <p>Dear Parent/Guardian,</p>
+      <p>
+        We are pleased to inform you that <strong>${fullName}</strong> has been offered provisional admission into the
+        University of Ibadan Sports Academy 2026 Summer Sports Camp.
+      </p>
+
+      <div class="info">
+        <div class="row"><div class="label">Applicant Name</div><div class="value">${fullName}</div></div>
+        <div class="row"><div class="label">Form Number</div><div class="value">${formNumber}</div></div>
+        <div class="row"><div class="label">Sport</div><div class="value">${sport}</div></div>
+        <div class="row"><div class="label">Category</div><div class="value">${category}</div></div>
+        <div class="row"><div class="label">Resumption Date</div><div class="value"><strong>August 3, 2026</strong> (7:00 AM - 9:00 AM)</div></div>
+        <div class="row"><div class="label">Venue</div><div class="value">International School, University of Ibadan</div></div>
+      </div>
+
+      <p>
+        Kindly come along with this admission letter and all required documents for screening and final onboarding.
+      </p>
+
+      <div class="sign">
+        <div class="line"></div>
+        <p style="margin-top:8px;font-size:14px;font-family:Arial,sans-serif;">Camp Director</p>
+      </div>
+
+      <div class="foot">
+        This is a system-generated admission letter for verification and onboarding purposes.
+      </div>
+    </div>
+  </body>
+</html>`;
+  };
+
+  const downloadAdmissionLetter = () => {
+    if (!result) return;
+    const html = buildAdmissionLetterHtml(result);
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `admission-letter-${(result.form_number || 'uisa').replace(/[^a-zA-Z0-9-]/g, '-')}.html`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const printAdmissionLetter = () => {
+    if (!result) return;
+    const html = buildAdmissionLetterHtml(result);
+    const printWin = window.open('', '_blank', 'noopener,noreferrer,width=980,height=860');
+    if (!printWin) return;
+    printWin.document.open();
+    printWin.document.write(html);
+    printWin.document.close();
+    printWin.focus();
+    setTimeout(() => {
+      printWin.print();
+    }, 250);
+  };
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--surface)' }}>
@@ -209,9 +312,22 @@ export default function StatusPage() {
               {result.status === 'Admitted' && (
                 <div style={{ marginTop: 20, padding: '16px', background: 'var(--green-bg)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(22,163,74,0.3)' }}>
                   <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--green)', marginBottom: 4 }}>🎉 Congratulations! You have been admitted.</p>
-                  <p style={{ fontSize: 13, color: 'var(--text-2)' }}>
+                  <p style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 12 }}>
                     Please arrive at International School, University of Ibadan on <strong>August 3, 2026</strong> between 7–9AM with your admission letter and all documents.
                   </p>
+                  <div style={{ background: '#ffffff', border: '1px solid rgba(22,163,74,0.28)', borderRadius: 'var(--radius-md)', padding: '12px 14px' }}>
+                    <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--green)', marginBottom: 10 }}>
+                      Click below to get your admission letter for download or printing.
+                    </p>
+                    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                      <button type="button" className="btn btn-primary btn-sm" onClick={downloadAdmissionLetter}>
+                        <FileText size={14} /> Download Admission Letter
+                      </button>
+                      <button type="button" className="btn btn-outline btn-sm" onClick={printAdmissionLetter}>
+                        <Printer size={14} /> Print Admission Letter
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>

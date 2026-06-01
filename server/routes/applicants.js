@@ -310,8 +310,8 @@ router.get('/', authenticate, async (req, res) => {
 // ─── GET /api/applicants/id-cards  (admin: admitted applicants) ─────────────
 router.get('/id-cards', authenticate, async (req, res) => {
   const { ids } = req.query;
-  const params = ['Admitted'];
-  let where = 'WHERE a.status = ?';
+  const params = [];
+  let where = "WHERE (a.status IN ('Admitted','Medical Cleared','Payment Verified') OR COALESCE(a.id_card_generated, FALSE) = TRUE)";
 
   if (ids) {
     const parsedIds = String(ids)
@@ -338,6 +338,8 @@ router.get('/id-cards', authenticate, async (req, res) => {
       a.guardian_email,
       a.sport_selection,
       a.age_category,
+      a.id_card_generated,
+      a.id_card_generated_at,
       a.group_assigned,
       a.room_number,
       a.passport_photo,
@@ -431,11 +433,19 @@ router.patch('/:id/status', authenticate, requireRole('admin','super_admin'), as
 
   await pool.query(`
     UPDATE applicants SET status = ?,
+      id_card_generated = CASE
+        WHEN ? = 'Admitted' THEN TRUE
+        ELSE id_card_generated
+      END,
+      id_card_generated_at = CASE
+        WHEN ? = 'Admitted' THEN COALESCE(id_card_generated_at, CURRENT_TIMESTAMP)
+        ELSE id_card_generated_at
+      END,
       group_assigned  = COALESCE(?, group_assigned),
       room_number     = COALESCE(?, room_number),
       coach_assigned  = COALESCE(?, coach_assigned)
     WHERE id = ?`,
-    [status, group_assigned||null, room_number||null, coach_assigned||null, req.params.id]
+    [status, status, status, group_assigned||null, room_number||null, coach_assigned||null, req.params.id]
   );
 
   // Audit log

@@ -1,5 +1,4 @@
 import React from 'react';
-import brandLogo from '../assets/ui-brand-logo.svg';
 
 const OFFICIAL_UI_LOGO_URL = 'https://www.ui.edu.ng/sites/default/files/WhatsApp%20Image%202023-08-11%20at%201.55.09%20PM.jpeg';
 
@@ -11,7 +10,6 @@ export default function BrandLogo({ width = 220, compact = false, darkBackground
       <img
         src={OFFICIAL_UI_LOGO_URL}
         alt="University of Ibadan"
-        onError={(e) => { e.currentTarget.src = brandLogo; }}
         style={{ width, maxWidth: '100%', height: 'auto', objectFit: 'contain', display: 'block' }}
       />
       {compact ? null : (

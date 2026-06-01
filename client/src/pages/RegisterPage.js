@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { ChevronLeft, ChevronRight, Check, Upload, X } from 'lucide-react';
+import { Country, State, City } from 'country-state-city';
 import api from '../utils/api';
 import BrandLogo from '../components/BrandLogo';
 
@@ -64,6 +65,14 @@ export default function RegisterPage() {
   const [reviewing, setReviewing] = useState(false);
   const [acceptedPayload, setAcceptedPayload] = useState(null);
 
+  const countries = Country.getAllCountries();
+  const selectedCountry = countries.find((c) => c.name === data.nationality);
+  const states = selectedCountry ? State.getStatesOfCountry(selectedCountry.isoCode) : [];
+  const selectedStateOfOrigin = states.find((s) => s.name === data.state_of_origin);
+  const localGovernments = (selectedCountry && selectedStateOfOrigin)
+    ? City.getCitiesOfState(selectedCountry.isoCode, selectedStateOfOrigin.isoCode)
+    : [];
+
   const set = (k, v) => {
     setData(p => {
       const newData = { ...p, [k]: v };
@@ -75,6 +84,32 @@ export default function RegisterPage() {
   const toggle = k => {
     setData(p => {
       const newData = { ...p, [k]: !p[k] };
+      localStorage.setItem('registration_form_data', JSON.stringify(newData));
+      return newData;
+    });
+  };
+
+  const setNationality = (nationality) => {
+    setData((p) => {
+      const newData = {
+        ...p,
+        nationality,
+        state_of_origin: '',
+        lga: '',
+        state: '',
+      };
+      localStorage.setItem('registration_form_data', JSON.stringify(newData));
+      return newData;
+    });
+  };
+
+  const setStateOfOrigin = (stateOfOrigin) => {
+    setData((p) => {
+      const newData = {
+        ...p,
+        state_of_origin: stateOfOrigin,
+        lga: '',
+      };
       localStorage.setItem('registration_form_data', JSON.stringify(newData));
       return newData;
     });
@@ -333,15 +368,30 @@ export default function RegisterPage() {
                   </Select>
                 </Field>
                 <Field label="Nationality">
-                  <Input value={data.nationality} onChange={e => set('nationality', e.target.value)} placeholder="Nigerian" />
+                  <Select value={data.nationality} onChange={e => setNationality(e.target.value)}>
+                    <option value="">Select country</option>
+                    {countries.map((country) => (
+                      <option key={country.isoCode} value={country.name}>{country.name}</option>
+                    ))}
+                  </Select>
                 </Field>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
                 <Field label="State of Origin">
-                  <Input value={data.state_of_origin} onChange={e => set('state_of_origin', e.target.value)} />
+                  <Select value={data.state_of_origin} onChange={e => setStateOfOrigin(e.target.value)} disabled={!data.nationality}>
+                    <option value="">{data.nationality ? 'Select state / province' : 'Select nationality first'}</option>
+                    {states.map((state) => (
+                      <option key={state.isoCode} value={state.name}>{state.name}</option>
+                    ))}
+                  </Select>
                 </Field>
-                <Field label="LGA">
-                  <Input value={data.lga} onChange={e => set('lga', e.target.value)} />
+                <Field label="Local Government / Region">
+                  <Select value={data.lga} onChange={e => set('lga', e.target.value)} disabled={!data.state_of_origin}>
+                    <option value="">{data.state_of_origin ? 'Select local government / region' : 'Select state first'}</option>
+                    {localGovernments.map((city) => (
+                      <option key={`${city.countryCode}-${city.stateCode}-${city.name}`} value={city.name}>{city.name}</option>
+                    ))}
+                  </Select>
                 </Field>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
@@ -357,7 +407,14 @@ export default function RegisterPage() {
               </Field>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                 <Field label="City"><Input value={data.city} onChange={e => set('city', e.target.value)} /></Field>
-                <Field label="State"><Input value={data.state} onChange={e => set('state', e.target.value)} /></Field>
+                <Field label="State">
+                  <Select value={data.state} onChange={e => set('state', e.target.value)} disabled={!data.nationality}>
+                    <option value="">{data.nationality ? 'Select state / province' : 'Select nationality first'}</option>
+                    {states.map((state) => (
+                      <option key={`address-${state.isoCode}`} value={state.name}>{state.name}</option>
+                    ))}
+                  </Select>
+                </Field>
               </div>
               {cat && (
                 <div style={{ background: 'rgba(26,111,165,0.06)', borderRadius: 'var(--radius-md)', padding: '12px 16px', fontSize: 13, color: 'var(--blue)', fontWeight: 600 }}>

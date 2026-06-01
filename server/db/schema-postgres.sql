@@ -74,6 +74,8 @@ CREATE TABLE IF NOT EXISTS applicants (
   school_result    TEXT,
 
   status          TEXT DEFAULT 'Pending' CHECK (status IN ('Pending','Payment Submitted','Payment Verified','Medical Cleared','Admitted','Rejected')),
+  id_card_generated BOOLEAN DEFAULT FALSE,
+  id_card_generated_at TIMESTAMPTZ,
   group_assigned  TEXT,
   room_number     TEXT,
   coach_assigned  TEXT,
@@ -181,6 +183,16 @@ ALTER TABLE payments
   ADD COLUMN IF NOT EXISTS receipt_amount NUMERIC(10,2),
   ADD COLUMN IF NOT EXISTS receipt_transaction_ref TEXT,
   ADD COLUMN IF NOT EXISTS ocr_extracted_at TIMESTAMPTZ;
+
+ALTER TABLE applicants
+  ADD COLUMN IF NOT EXISTS id_card_generated BOOLEAN DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS id_card_generated_at TIMESTAMPTZ;
+
+UPDATE applicants
+SET id_card_generated = TRUE,
+    id_card_generated_at = COALESCE(id_card_generated_at, CURRENT_TIMESTAMP)
+WHERE status IN ('Admitted', 'Payment Verified', 'Medical Cleared')
+  AND COALESCE(id_card_generated, FALSE) = FALSE;
 
 CREATE OR REPLACE FUNCTION set_form_number_fn()
 RETURNS TRIGGER AS $$

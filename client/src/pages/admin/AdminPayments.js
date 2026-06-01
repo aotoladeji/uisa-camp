@@ -22,6 +22,16 @@ export default function AdminPayments() {
 
   const serverUrl = process.env.REACT_APP_SERVER_URL || 'http://localhost:5000';
 
+  const formatDateDMY = (value) => {
+    if (!value) return '—';
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return String(value);
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}/${month}/${year}`;
+  };
+
   const fetch = useCallback(async () => {
     setLoading(true);
     try {
@@ -170,7 +180,6 @@ export default function AdminPayments() {
                     <td style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text-3)' }}>{row.form_number}</td>
                     <td>
                       <div style={{ fontWeight: 600, fontSize: 14 }}>{row.full_name}</div>
-                      <div style={{ fontSize: 12, color: 'var(--text-3)' }}>{row.guardian_email}</div>
                     </td>
                     <td style={{ fontSize: 13 }}>{row.sport_selection}</td>
                     <td style={{ fontWeight: 700, fontSize: 14 }}>₦{parseFloat(row.amount_paid || 0).toLocaleString()}</td>
@@ -185,7 +194,7 @@ export default function AdminPayments() {
                     </td>
                     <td style={{ fontSize: 13, color: 'var(--text-2)', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.transaction_ref || '—'}</td>
                     <td style={{ fontSize: 13, color: 'var(--text-2)', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.receipt_transaction_ref || '—'}</td>
-                    <td style={{ fontSize: 13, color: 'var(--text-2)' }}>{row.payment_date || '—'}</td>
+                    <td style={{ fontSize: 13, color: 'var(--text-2)' }}>{formatDateDMY(row.payment_date)}</td>
                     <td>
                       <span className={`badge ${row.verification_status === 'Verified' ? 'badge-verified' : row.verification_status === 'Rejected' ? 'badge-rejected' : 'badge-pending'}`}>
                         {row.verification_status}
