@@ -1,8 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { ChevronLeft, ChevronRight, Check, Upload, X } from 'lucide-react';
-import { Country, State, City } from 'country-state-city';
 import api from '../utils/api';
 import BrandLogo from '../components/BrandLogo';
 
@@ -64,13 +63,29 @@ export default function RegisterPage() {
   const [result, setResult]   = useState(null);
   const [reviewing, setReviewing] = useState(false);
   const [acceptedPayload, setAcceptedPayload] = useState(null);
+  const [locationLib, setLocationLib] = useState(null);
 
-  const countries = Country.getAllCountries();
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const mod = await import('country-state-city');
+        if (mounted) setLocationLib(mod);
+      } catch (err) {
+        console.error('Failed to load location library:', err);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  const countries = locationLib?.Country?.getAllCountries?.() || [];
   const selectedCountry = countries.find((c) => c.name === data.nationality);
-  const states = selectedCountry ? State.getStatesOfCountry(selectedCountry.isoCode) : [];
+  const states = selectedCountry && locationLib?.State
+    ? locationLib.State.getStatesOfCountry(selectedCountry.isoCode)
+    : [];
   const selectedStateOfOrigin = states.find((s) => s.name === data.state_of_origin);
-  const localGovernments = (selectedCountry && selectedStateOfOrigin)
-    ? City.getCitiesOfState(selectedCountry.isoCode, selectedStateOfOrigin.isoCode)
+  const localGovernments = (selectedCountry && selectedStateOfOrigin && locationLib?.City)
+    ? locationLib.City.getCitiesOfState(selectedCountry.isoCode, selectedStateOfOrigin.isoCode)
     : [];
 
   const set = (k, v) => {
