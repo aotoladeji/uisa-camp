@@ -31,20 +31,20 @@ router.post('/submit',
       let rows = [];
       if (applicant_id) {
         [rows] = await pool.query(
-          'SELECT id, guardian_email, form_number, CONCAT(first_name," ",surname) AS full_name, guardian_name, sport_selection FROM applicants WHERE id = ? AND LOWER(TRIM(guardian_email)) = LOWER(TRIM(?))',
+          "SELECT id, guardian_email, form_number, CONCAT(first_name, ' ', surname) AS full_name, guardian_name, sport_selection FROM applicants WHERE id = ? AND LOWER(TRIM(guardian_email)) = LOWER(TRIM(?))",
           [parseInt(applicant_id, 10), guardian_email]
         );
       }
       if (!rows.length && form_number) {
         [rows] = await pool.query(
-          'SELECT id, guardian_email, form_number, CONCAT(first_name," ",surname) AS full_name, guardian_name, sport_selection FROM applicants WHERE form_number = ? AND LOWER(TRIM(guardian_email)) = LOWER(TRIM(?))',
+          "SELECT id, guardian_email, form_number, CONCAT(first_name, ' ', surname) AS full_name, guardian_name, sport_selection FROM applicants WHERE form_number = ? AND LOWER(TRIM(guardian_email)) = LOWER(TRIM(?))",
           [form_number, guardian_email]
         );
       }
       if (!rows.length && guardian_email) {
         // Fallback for stale payment links: pick the latest application for this guardian email.
         [rows] = await pool.query(
-          `SELECT id, guardian_email, form_number, CONCAT(first_name," ",surname) AS full_name, guardian_name, sport_selection
+          `SELECT id, guardian_email, form_number, CONCAT(first_name, ' ', surname) AS full_name, guardian_name, sport_selection
            FROM applicants
            WHERE LOWER(TRIM(guardian_email)) = LOWER(TRIM(?))
            ORDER BY created_at DESC, id DESC
@@ -95,9 +95,16 @@ router.post('/submit',
         );
       }
 
-      // Update applicant status
+      // Update applicant status only for pre-admission states.
+      // Keep already progressed states (e.g. Admitted) unchanged.
       await pool.query(
-        "UPDATE applicants SET status = 'Payment Submitted' WHERE id = ?", [applicant_id]
+        `UPDATE applicants
+         SET status = CASE
+           WHEN status IN ('Pending', 'Rejected') THEN 'Payment Submitted'
+           ELSE status
+         END
+         WHERE id = ?`,
+        [applicant_id]
       );
 
       res.json({ 
@@ -112,17 +119,31 @@ router.post('/submit',
           const extracted = await extractPaymentDetails(req.file.path);
 
           const [paymentRows] = await pool.query(
-            'SELECT id, transaction_ref, payment_date, bank_name, account_number FROM payments WHERE applicant_id = ? ORDER BY id DESC LIMIT 1',
+            `SELECT id, transaction_ref, receipt_transaction_ref, amount_paid, receipt_amount,
+                    payment_date, bank_name, account_number
+             FROM payments
+             WHERE applicant_id = ?
+             ORDER BY id DESC
+             LIMIT 1`,
             [applicant_id]
           );
           if (paymentRows.length) {
             const payment = paymentRows[0];
             await pool.query(
               `UPDATE payments
-               SET transaction_ref = ?, payment_date = ?, bank_name = ?, account_number = ?, updated_at = CURRENT_TIMESTAMP
+               SET transaction_ref = ?,
+                   receipt_transaction_ref = ?,
+                   receipt_amount = ?,
+                   payment_date = ?,
+                   bank_name = ?,
+                   account_number = ?,
+                   ocr_extracted_at = CURRENT_TIMESTAMP,
+                   updated_at = CURRENT_TIMESTAMP
                WHERE id = ?`,
               [
                 payment.transaction_ref || extracted.transaction_ref || null,
+                payment.receipt_transaction_ref || extracted.transaction_ref || null,
+                payment.receipt_amount || extracted.amount_paid || null,
                 payment.payment_date || extracted.payment_date || null,
                 payment.bank_name || extracted.bank_name || 'Access Bank',
                 payment.account_number || extracted.account_number || null,

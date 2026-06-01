@@ -91,6 +91,9 @@ CREATE TABLE IF NOT EXISTS payments (
   discount_pct        NUMERIC(5,2) DEFAULT 0,
   gross_amount        NUMERIC(10,2) NOT NULL DEFAULT 230000,
   transaction_ref     TEXT,
+  receipt_amount      NUMERIC(10,2),
+  receipt_transaction_ref TEXT,
+  ocr_extracted_at    TIMESTAMPTZ,
   bank_name           TEXT DEFAULT 'Access Bank',
   account_number      TEXT DEFAULT '1805832892',
   payment_date        DATE,
@@ -173,6 +176,11 @@ BEGIN
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();
   END IF;
 END $$;
+
+ALTER TABLE payments
+  ADD COLUMN IF NOT EXISTS receipt_amount NUMERIC(10,2),
+  ADD COLUMN IF NOT EXISTS receipt_transaction_ref TEXT,
+  ADD COLUMN IF NOT EXISTS ocr_extracted_at TIMESTAMPTZ;
 
 CREATE OR REPLACE FUNCTION set_form_number_fn()
 RETURNS TRIGGER AS $$

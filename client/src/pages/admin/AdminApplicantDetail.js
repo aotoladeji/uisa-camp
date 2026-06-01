@@ -222,9 +222,11 @@ export default function AdminApplicantDetail() {
               <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--navy)', marginBottom: 14, textTransform: 'uppercase', letterSpacing: '.5px' }}>Payment</div>
               {[
                 ['Amount', appl.amount_paid ? `₦${parseFloat(appl.amount_paid).toLocaleString()}` : '—'],
+                ['Receipt Amount (OCR)', appl.receipt_amount ? `₦${parseFloat(appl.receipt_amount).toLocaleString()}` : '—'],
                 ['Fee Type', appl.fee_type],
                 ['Date', appl.payment_date],
                 ['Reference', appl.transaction_ref],
+                ['Receipt Reference (OCR)', appl.receipt_transaction_ref],
                 ['Status', appl.verification_status],
                 ['Verified', appl.verified_at ? new Date(appl.verified_at).toLocaleString() : '—'],
               ].map(([k, v]) => v && (

@@ -217,13 +217,13 @@ export default function RegisterPage() {
             Application Accepted
           </h2>
           <p style={{ color: 'var(--text-2)', marginBottom: 20, lineHeight: 1.6 }}>
-            Congratulations. Your application has been accepted automatically based on your submitted details.
+            Congratulations. Your application has been accepted based on your submitted details.
           </p>
           <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-md)', padding: '16px 20px', marginBottom: 26, textAlign: 'left' }}>
             <div style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 4 }}>Application Form Number</div>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, color: 'var(--navy)' }}>{acceptedPayload.form_number}</div>
           </div>
-          <Link to={`/payment?id=${acceptedPayload.applicant_id}&email=${encodeURIComponent(acceptedPayload.guardian_email || '')}`} className="btn btn-gold" style={{ width: '100%' }}>
+          <Link to={`/payment?form_number=${encodeURIComponent(acceptedPayload.form_number || '')}&email=${encodeURIComponent(acceptedPayload.guardian_email || '')}`} className="btn btn-gold" style={{ width: '100%' }}>
             Proceed to Payment
           </Link>
         </div>
@@ -479,7 +479,7 @@ export default function RegisterPage() {
               <div style={{ background: 'rgba(26,111,165,0.05)', borderRadius: 'var(--radius-md)', padding: '12px 16px', fontSize: 13, color: 'var(--text-2)', marginBottom: 4 }}>
                 UI Sports Academy promotes the Student-Athlete development model.
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                 <Field label="Last Academic Average (%)">
                   <Input type="number" min="0" max="100" value={data.last_avg_score} onChange={e => set('last_avg_score', e.target.value)} placeholder="75" />
                 </Field>

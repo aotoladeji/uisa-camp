@@ -412,7 +412,8 @@ router.post('/bulk-delete', authenticate, requireRole('admin','super_admin'), as
 router.get('/:id', authenticate, async (req, res) => {
   const [rows] = await pool.query(`
     SELECT a.*, p.id AS payment_id, p.amount_paid, p.fee_type, p.discount_pct,
-           p.transaction_ref, p.payment_date, p.receipt_path,
+           p.transaction_ref, p.receipt_amount, p.receipt_transaction_ref,
+           p.payment_date, p.receipt_path,
            p.verification_status, p.verified_at, p.rejection_reason
     FROM applicants a
     LEFT JOIN payments p ON p.applicant_id = a.id
@@ -445,7 +446,7 @@ router.patch('/:id/status', authenticate, requireRole('admin','super_admin'), as
 
   // Send appropriate email
   const [applRows] = await pool.query(
-    'SELECT *, CONCAT(first_name," ",surname) AS full_name FROM applicants WHERE id = ?',
+    'SELECT *, CONCAT(first_name, \' \', surname) AS full_name FROM applicants WHERE id = ?',
     [req.params.id]
   );
   const appl = applRows[0];

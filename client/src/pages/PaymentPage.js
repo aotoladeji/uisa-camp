@@ -8,7 +8,7 @@ import BrandLogo from '../components/BrandLogo';
 export default function PaymentPage() {
   const [params] = useSearchParams();
   const [form, setForm] = useState({
-    applicant_id: params.get('id') || '',
+    applicant_id: params.get('form_number') || params.get('id') || '',
     guardian_email: params.get('email') || '',
     payment_plan: '',
     transaction_ref: '',
@@ -52,7 +52,7 @@ export default function PaymentPage() {
     e.preventDefault();
     if (!receipt) { toast.error('Please attach your payment receipt'); return; }
     if (!selectedPlan) { toast.error('Please select a payment plan'); return; }
-    if (!form.applicant_id || !form.guardian_email) { toast.error('Application ID and email are required'); return; }
+    if (!form.applicant_id || !form.guardian_email) { toast.error('Form Number and email are required'); return; }
 
     setLoading(true);
     try {
@@ -188,7 +188,7 @@ export default function PaymentPage() {
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
               <div className="form-field">
-                <label>Application ID / Form Number <span className="req">*</span></label>
+                <label>Application Form Number <span className="req">*</span></label>
                 <input className="form-input" placeholder="UI/SA/2026/0001" value={form.applicant_id} onChange={e => set('applicant_id', e.target.value)} required />
               </div>
               <div className="form-field">

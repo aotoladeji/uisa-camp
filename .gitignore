@@ -16,7 +16,6 @@ server/.env
 client/.env
 
 # Runtime data and uploads
-server/db/uisa_camp.db
 server/uploads/documents/*
 server/uploads/photos/*
 server/uploads/receipts/*

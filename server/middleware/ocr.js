@@ -15,40 +15,78 @@ function emptyExtracted() {
   };
 }
 
+function normalizeOcrText(raw) {
+  return String(raw || '')
+    .replace(/[\u2013\u2014]/g, '-')
+    .replace(/[|]/g, 'I')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function sanitizeReference(ref) {
+  if (!ref) return null;
+  const cleaned = String(ref)
+    .trim()
+    .replace(/^[^A-Z0-9]+/i, '')
+    .replace(/[^A-Z0-9/-]+$/i, '')
+    .replace(/\s+/g, '');
+  if (!cleaned) return null;
+  // Avoid storing plain account numbers as transaction IDs.
+  if (/^\d{10}$/.test(cleaned)) return null;
+  return cleaned;
+}
+
+function extractAmount(text) {
+  const candidates = [];
+  const amountRegex = /(?:amount|amt|total|paid|debit|transfer)\s*(?:is|:|-)?\s*(?:NGN|N|#|₦)?\s*([\d][\d,\s]{2,}(?:\.\d{1,2})?)/gi;
+  const currencyRegex = /(?:NGN|N|#|₦)\s*([\d][\d,\s]{2,}(?:\.\d{1,2})?)/gi;
+  const generalRegex = /\b([\d]{1,3}(?:,[\d]{3})+(?:\.\d{1,2})?|[\d]{4,}(?:\.\d{1,2})?)\b/g;
+
+  const pushMatches = (regex) => {
+    regex.lastIndex = 0;
+    let match;
+    while ((match = regex.exec(text)) !== null) {
+      const raw = (match[1] || '').replace(/\s+/g, '');
+      const parsed = Number.parseFloat(raw.replace(/,/g, ''));
+      if (Number.isFinite(parsed) && parsed >= 1000 && parsed <= 5000000) {
+        candidates.push(parsed);
+      }
+    }
+  };
+
+  pushMatches(amountRegex);
+  pushMatches(currencyRegex);
+  pushMatches(generalRegex);
+
+  if (!candidates.length) return null;
+  // Pick the first sensible camp-payment-like value, otherwise highest plausible value.
+  const priority = candidates.find(v => v >= 100000 && v <= 500000);
+  return priority || Math.max(...candidates);
+}
+
 function extractFromText(text) {
   const extracted = emptyExtracted();
+  const normalizedText = normalizeOcrText(text);
 
   // Extract transaction reference/ID (various patterns)
   const refPatterns = [
-    /(?:transaction|trans|ref|reference|trx)[\s:]*([A-Z0-9]{8,})/i,
-    /(?:session\s*id|session)[\s:]*([A-Z0-9]{8,})/i,
-    /\b([A-Z]{2,}\d{6,})\b/,
+    /(?:transaction(?:\s*(?:id|ref(?:erence)?))?|trans|trx|ref(?:erence)?|session(?:\s*id)?|rrn|stan|retrieval\s*ref(?:erence)?)\s*(?:no|number|#|:|-)?\s*([A-Z0-9/_-]{6,40})/i,
+    /\b([A-Z]{2,}[A-Z0-9]{6,})\b/,
+    /\b([0-9]{10,20})\b/,
   ];
   for (const pattern of refPatterns) {
-    const match = text.match(pattern);
+    const match = normalizedText.match(pattern);
     if (match) {
-      extracted.transaction_ref = match[1].trim();
-      break;
-    }
-  }
-
-  // Extract amount (NGN/Naira patterns)
-  const amountPatterns = [
-    /(?:amount|amt|total|paid)[\s:]*(?:NGN|₦|N)?\s*([\d,]+\.?\d*)/i,
-    /(?:NGN|₦|N)\s*([\d,]+\.?\d*)/,
-    /\b([\d,]+\.00)\b/,
-  ];
-  for (const pattern of amountPatterns) {
-    const match = text.match(pattern);
-    if (match) {
-      const amount = parseFloat(match[1].replace(/,/g, ''));
-      // Validate amount is reasonable (between 100k and 300k)
-      if (amount >= 100000 && amount <= 300000) {
-        extracted.amount_paid = amount;
+      const ref = sanitizeReference(match[1]);
+      if (ref) {
+        extracted.transaction_ref = ref;
         break;
       }
     }
   }
+
+  // Extract amount (store OCR-detected amount even if different from selected amount).
+  extracted.amount_paid = extractAmount(normalizedText);
 
   // Extract date (various formats)
   const datePatterns = [
@@ -57,7 +95,7 @@ function extractFromText(text) {
     /(\d{4}-\d{2}-\d{2})/,
   ];
   for (const pattern of datePatterns) {
-    const match = text.match(pattern);
+    const match = normalizedText.match(pattern);
     if (match) {
       extracted.payment_date = match[1].trim();
       break;
@@ -71,20 +109,20 @@ function extractFromText(text) {
     /\b(\d{10})\b/,
   ];
   for (const pattern of accountPatterns) {
-    const match = text.match(pattern);
+    const match = normalizedText.match(pattern);
     if (match) {
       extracted.account_number = match[1].trim();
       break;
     }
   }
 
-  const bankMatch = text.match(/(?:bank|paid\s+to\s+bank)[\s:]*([A-Za-z][A-Za-z\s.&-]{2,40})/i)
-    || text.match(/\b(Access\s+Bank|GTBank|First\s+Bank|UBA|Zenith\s+Bank|Fidelity\s+Bank|FCMB|Sterling\s+Bank|Union\s+Bank|Wema\s+Bank|Opay|Palmpay)\b/i);
+  const bankMatch = normalizedText.match(/(?:bank|paid\s+to\s+bank)[\s:]*([A-Za-z][A-Za-z\s.&-]{2,40})/i)
+    || normalizedText.match(/\b(Access\s+Bank|GTBank|First\s+Bank|UBA|Zenith\s+Bank|Fidelity\s+Bank|FCMB|Sterling\s+Bank|Union\s+Bank|Wema\s+Bank|Opay|Palmpay)\b/i);
   if (bankMatch) {
     extracted.bank_name = bankMatch[1].trim().replace(/\s{2,}/g, ' ');
   }
 
-  const accountNameMatch = text.match(/(?:account\s*name|acct\s*name|beneficiary|recipient|payee)[\s:]*([A-Za-z][A-Za-z\s.'-]{3,80})/i);
+  const accountNameMatch = normalizedText.match(/(?:account\s*name|acct\s*name|beneficiary|recipient|payee)[\s:]*([A-Za-z][A-Za-z\s.'-]{3,80})/i);
   if (accountNameMatch) {
     extracted.account_name = accountNameMatch[1].trim().replace(/\s{2,}/g, ' ');
   }

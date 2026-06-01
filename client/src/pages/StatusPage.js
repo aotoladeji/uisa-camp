@@ -200,7 +200,7 @@ export default function StatusPage() {
                   <p style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 12 }}>
                     Transfer ₦{new Date() <= new Date('2026-07-03') ? '207,000' : '230,000'} to Access Bank — 1805832892 and upload your receipt.
                   </p>
-                  <Link to={`/payment?id=${result.id}&email=${result.guardian_email}`} className="btn btn-gold btn-sm">
+                  <Link to={`/payment?form_number=${encodeURIComponent(result.form_number || '')}&email=${encodeURIComponent(result.guardian_email || '')}`} className="btn btn-gold btn-sm">
                     Upload Receipt <ArrowRight size={14} />
                   </Link>
                 </div>

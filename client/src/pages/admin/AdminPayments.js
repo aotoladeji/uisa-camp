@@ -65,8 +65,10 @@ export default function AdminPayments() {
       { key: 'guardian_email', label: 'Guardian Email' },
       { key: 'sport_selection', label: 'Sport' },
       { key: 'amount_paid', label: 'Amount Paid' },
+      { key: 'receipt_amount', label: 'Receipt Amount (OCR)' },
       { key: 'fee_type', label: 'Fee Type' },
       { key: 'transaction_ref', label: 'Transaction Reference' },
+      { key: 'receipt_transaction_ref', label: 'Receipt Reference (OCR)' },
       { key: 'payment_date', label: 'Payment Date' },
       { key: 'bank_name', label: 'Bank Name' },
       { key: 'account_number', label: 'Account Number' },
@@ -83,8 +85,10 @@ export default function AdminPayments() {
       guardian_email: row.guardian_email || '',
       sport_selection: row.sport_selection || '',
       amount_paid: row.amount_paid ?? '',
+      receipt_amount: row.receipt_amount ?? '',
       fee_type: row.fee_type || '',
       transaction_ref: row.transaction_ref || '',
+      receipt_transaction_ref: row.receipt_transaction_ref || '',
       payment_date: row.payment_date || '',
       bank_name: row.bank_name || '',
       account_number: row.account_number || '',
@@ -149,9 +153,11 @@ export default function AdminPayments() {
                   <th>Form #</th>
                   <th>Applicant</th>
                   <th>Sport</th>
-                  <th>Amount</th>
+                  <th>Amount (Selected)</th>
+                  <th>Amount (Receipt)</th>
                   <th>Fee Type</th>
                   <th>Reference</th>
+                  <th>Receipt Ref</th>
                   <th>Payment Date</th>
                   <th>Status</th>
                   <th>Receipt</th>
@@ -168,6 +174,9 @@ export default function AdminPayments() {
                     </td>
                     <td style={{ fontSize: 13 }}>{row.sport_selection}</td>
                     <td style={{ fontWeight: 700, fontSize: 14 }}>₦{parseFloat(row.amount_paid || 0).toLocaleString()}</td>
+                    <td style={{ fontWeight: 700, fontSize: 14, color: row.receipt_amount && Number(row.receipt_amount) !== Number(row.amount_paid) ? 'var(--amber)' : 'var(--text-1)' }}>
+                      {row.receipt_amount ? `₦${parseFloat(row.receipt_amount).toLocaleString()}` : '—'}
+                    </td>
                     <td>
                       {row.fee_type === 'Early Bird'
                         ? <span style={{ fontSize: 12, fontWeight: 600, background: 'var(--amber-bg)', color: 'var(--amber)', padding: '2px 8px', borderRadius: 12 }}>⭐ Early Bird</span>
@@ -175,6 +184,7 @@ export default function AdminPayments() {
                       }
                     </td>
                     <td style={{ fontSize: 13, color: 'var(--text-2)', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.transaction_ref || '—'}</td>
+                    <td style={{ fontSize: 13, color: 'var(--text-2)', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.receipt_transaction_ref || '—'}</td>
                     <td style={{ fontSize: 13, color: 'var(--text-2)' }}>{row.payment_date || '—'}</td>
                     <td>
                       <span className={`badge ${row.verification_status === 'Verified' ? 'badge-verified' : row.verification_status === 'Rejected' ? 'badge-rejected' : 'badge-pending'}`}>
@@ -236,6 +246,11 @@ export default function AdminPayments() {
             </h3>
             <p style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 20 }}>
               Applicant: <strong>{selected.full_name}</strong> · Amount: <strong>₦{parseFloat(selected.amount_paid || 0).toLocaleString()}</strong>
+            </p>
+            <p style={{ fontSize: 12, color: 'var(--text-3)', marginTop: -12, marginBottom: 16 }}>
+              Receipt OCR Amount: <strong>{selected.receipt_amount ? `₦${parseFloat(selected.receipt_amount).toLocaleString()}` : '—'}</strong>
+              {' · '}
+              Receipt OCR Ref: <strong>{selected.receipt_transaction_ref || '—'}</strong>
             </p>
 
             {/* Show receipt inline */}
