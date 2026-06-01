@@ -1,183 +1,111 @@
-const initSqlJs = require('sql.js');
 const fs = require('fs');
 const path = require('path');
+const { Pool } = require('pg');
 require('dotenv').config();
 
-let db = null;
-const DB_PATH = path.join(__dirname, 'uisa_camp.db');
-const DB_LOCK_PATH = path.join(__dirname, 'uisa_camp.db.lock');
-const IS_TEST_RUN = process.env.NODE_ENV === 'test' || process.argv.includes('--test');
+const dbSchema = String(process.env.DB_SCHEMA || 'uisa_app').trim();
+if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(dbSchema)) {
+  throw new Error('Invalid DB_SCHEMA. Use only letters, numbers, and underscores.');
+}
 
-function acquireDbLock() {
-  if (IS_TEST_RUN) return;
-  const pid = process.pid;
-  if (fs.existsSync(DB_LOCK_PATH)) {
-    try {
-      const raw = fs.readFileSync(DB_LOCK_PATH, 'utf8').trim();
-      const existingPid = parseInt(raw, 10);
-      if (Number.isInteger(existingPid) && existingPid > 0) {
-        try {
-          process.kill(existingPid, 0);
-          throw new Error(`Database lock is already held by PID ${existingPid}. Stop duplicate server instances and try again.`);
-        } catch (err) {
-          if (err.code !== 'ESRCH') throw err;
-        }
-      }
-    } catch (err) {
-      if (err.code !== 'ENOENT') throw err;
-    }
+const pgPool = new Pool({
+  host: process.env.DB_HOST || 'localhost',
+  port: parseInt(process.env.DB_PORT || '5432', 10),
+  user: process.env.DB_USER || 'postgres',
+  password: `${process.env.DB_PASSWORD ?? ''}`,
+  database: process.env.DB_NAME || 'uisa_camp',
+  options: `-c search_path=${dbSchema},public`,
+  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
+});
+
+function toPgPlaceholders(sql) {
+  let i = 0;
+  return sql.replace(/\?/g, () => `$${++i}`);
+}
+
+function normalizeDbError(err) {
+  if (err && err.code === '23505') {
+    err.code = 'ER_DUP_ENTRY';
   }
-  fs.writeFileSync(DB_LOCK_PATH, String(pid), 'utf8');
+  return err;
 }
 
-function releaseDbLock() {
-  if (IS_TEST_RUN) return;
+async function ensureSchema() {
+  const schemaPath = path.join(__dirname, 'schema-postgres.sql');
+  const schema = fs.readFileSync(schemaPath, 'utf8');
+  const bootstrap = `CREATE SCHEMA IF NOT EXISTS ${dbSchema};\nSET search_path TO ${dbSchema}, public;\n`;
+  await pgPool.query(bootstrap + schema);
+}
+
+const dbReady = (async () => {
   try {
-    if (fs.existsSync(DB_LOCK_PATH)) {
-      const raw = fs.readFileSync(DB_LOCK_PATH, 'utf8').trim();
-      if (String(process.pid) === raw) {
-        fs.unlinkSync(DB_LOCK_PATH);
-      }
-    }
+    await pgPool.query('SELECT 1');
+    await ensureSchema();
+    console.log('✅ PostgreSQL connected and schema ready');
   } catch (err) {
-    console.warn('Could not release DB lock:', err.message);
-  }
-}
-
-function ensureRuntimeTables() {
-  if (!db) return;
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS app_settings (
-      setting_key TEXT PRIMARY KEY,
-      setting_value TEXT NOT NULL,
-      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-    );
-  `);
-  [
-    ['auto_accept_mode', 'balanced'],
-    ['camp_fee_amount', String(parseFloat(process.env.CAMP_FEE) || 230000)],
-    ['early_bird_enabled', '1'],
-    ['early_bird_discount_pct', '10'],
-    ['early_bird_fee_amount', ''],
-    ['early_bird_deadline', process.env.EARLY_BIRD_DEADLINE || '2026-07-03'],
-  ].forEach(([key, value]) => {
-    db.run(
-      `INSERT OR IGNORE INTO app_settings (setting_key, setting_value, updated_at)
-       VALUES (?, ?, CURRENT_TIMESTAMP)`,
-      [key, value]
-    );
-  });
-  saveDatabase();
-}
-
-// Initialize SQLite database
-(async () => {
-  try {
-    acquireDbLock();
-    const SQL = await initSqlJs();
-    
-    // Load existing database or create new one
-    if (fs.existsSync(DB_PATH)) {
-      const buffer = fs.readFileSync(DB_PATH);
-      db = new SQL.Database(buffer);
-      ensureRuntimeTables();
-      console.log('✅ SQLite database loaded:', DB_PATH);
-    } else {
-      db = new SQL.Database();
-      console.log('✅ SQLite database created');
-      
-      // Initialize schema only for new database
-      const schemaPath = path.join(__dirname, 'schema-sqlite.sql');
-      if (fs.existsSync(schemaPath)) {
-        const schema = fs.readFileSync(schemaPath, 'utf8');
-        db.exec(schema);
-        ensureRuntimeTables();
-        saveDatabase();
-        console.log('✅ Database schema initialized with tables');
-      } else {
-        console.error('❌ Schema file not found:', schemaPath);
-      }
-    }
-  } catch (err) {
-    console.error('❌ SQLite initialization failed:', err.message);
+    console.error('❌ PostgreSQL initialization failed:', err.message);
     process.exit(1);
   }
 })();
 
-// Save database to file
-function saveDatabase() {
-  if (db) {
-    const data = db.export();
-    fs.writeFileSync(DB_PATH, data);
+async function runQuery(executor, sql, params = []) {
+  await dbReady;
+  const text = toPgPlaceholders(sql);
+  const trimmed = sql.trim().toUpperCase();
+  const isSelect = trimmed.startsWith('SELECT');
+
+  try {
+    const result = await executor.query(text, params);
+    if (isSelect) return [result.rows];
+
+    let insertId = 0;
+    if (trimmed.startsWith('INSERT')) {
+      try {
+        const idResult = await executor.query('SELECT LASTVAL() AS id');
+        insertId = idResult.rows?.[0]?.id || 0;
+      } catch {
+        insertId = 0;
+      }
+    }
+
+    return [{ affectedRows: result.rowCount || 0, insertId }];
+  } catch (err) {
+    throw normalizeDbError(err);
   }
 }
 
-// MySQL-compatible wrapper for query execution
 const pool = {
   async query(sql, params = []) {
-    if (!db) throw new Error('Database not initialized');
-    
-    try {
-      // Handle SELECT queries
-      if (sql.trim().toUpperCase().startsWith('SELECT')) {
-        const stmt = db.prepare(sql);
-        stmt.bind(params);
-        const rows = [];
-        while (stmt.step()) {
-          rows.push(stmt.getAsObject());
-        }
-        stmt.free();
-        return [rows];
-      }
-      
-      // Handle INSERT/UPDATE/DELETE
-      db.run(sql, params);
-      
-      // Get last insert ID properly
-      let insertId = 0;
-      if (sql.trim().toUpperCase().startsWith('INSERT')) {
-        try {
-          const result = db.exec("SELECT last_insert_rowid() as id");
-          console.log('Last insert ID query result:', JSON.stringify(result));
-          if (result && result.length > 0 && result[0].values && result[0].values.length > 0) {
-            insertId = result[0].values[0][0];
-          }
-        } catch (e) {
-          console.error('Error getting insertId:', e);
-        }
-      }
-      
-      saveDatabase();
-      
-      return [{
-        affectedRows: db.getRowsModified(),
-        insertId: insertId
-      }];
-    } catch (err) {
-      console.error('Query error:', err.message, '\nSQL:', sql);
-      throw err;
-    }
+    return runQuery(pgPool, sql, params);
   },
-  
+
   async execute(sql, params = []) {
     return this.query(sql, params);
   },
-  
+
   async getConnection() {
+    await dbReady;
+    const client = await pgPool.connect();
+
     return {
-      query: this.query.bind(this),
-      execute: this.execute.bind(this),
-      release: () => {},
-      beginTransaction: async () => db.run('BEGIN TRANSACTION'),
-      commit: async () => { db.run('COMMIT'); saveDatabase(); },
-      rollback: async () => db.run('ROLLBACK')
+      query: (sql, params = []) => runQuery(client, sql, params),
+      execute: (sql, params = []) => runQuery(client, sql, params),
+      beginTransaction: async () => client.query('BEGIN'),
+      commit: async () => client.query('COMMIT'),
+      rollback: async () => client.query('ROLLBACK'),
+      release: () => client.release(),
     };
-  }
+  },
 };
 
-// Save on exit
-process.on('exit', () => { saveDatabase(); releaseDbLock(); });
-process.on('SIGINT', () => { saveDatabase(); releaseDbLock(); process.exit(); });
-process.on('SIGTERM', () => { saveDatabase(); releaseDbLock(); process.exit(); });
+process.on('SIGINT', async () => {
+  await pgPool.end();
+  process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+  await pgPool.end();
+  process.exit(0);
+});
 
 module.exports = pool;

@@ -47,7 +47,7 @@ router.post('/submit',
           `SELECT id, guardian_email, form_number, CONCAT(first_name," ",surname) AS full_name, guardian_name, sport_selection
            FROM applicants
            WHERE LOWER(TRIM(guardian_email)) = LOWER(TRIM(?))
-           ORDER BY datetime(created_at) DESC, id DESC
+           ORDER BY created_at DESC, id DESC
            LIMIT 1`,
           [guardian_email]
         );

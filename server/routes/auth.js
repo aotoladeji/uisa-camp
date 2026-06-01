@@ -19,7 +19,7 @@ router.post('/login',
     const { username, password } = req.body;
     try {
       const [rows] = await pool.query(
-        'SELECT * FROM admin_users WHERE username = ? AND is_active = 1',
+        'SELECT * FROM admin_users WHERE username = ? AND is_active = TRUE',
         [username]
       );
       if (!rows.length) return res.status(401).json({ error: 'Invalid credentials' });
@@ -72,8 +72,11 @@ router.patch('/settings/auto-accept-mode',
 
     const { mode } = req.body;
     await pool.query(
-      `INSERT OR REPLACE INTO app_settings (setting_key, setting_value, updated_at)
-       VALUES ('auto_accept_mode', ?, CURRENT_TIMESTAMP)`,
+      `INSERT INTO app_settings (setting_key, setting_value, updated_at)
+       VALUES ('auto_accept_mode', ?, CURRENT_TIMESTAMP)
+       ON CONFLICT (setting_key) DO UPDATE
+       SET setting_value = EXCLUDED.setting_value,
+           updated_at = CURRENT_TIMESTAMP`,
       [mode]
     );
     res.json({ success: true, mode });
@@ -108,21 +111,23 @@ router.patch('/settings/pricing',
       early_bird_deadline: req.body.early_bird_deadline || current.early_bird_deadline,
     };
 
-    await pool.query(
-      `INSERT OR REPLACE INTO app_settings (setting_key, setting_value, updated_at) VALUES
-        ('camp_fee_amount', ?, CURRENT_TIMESTAMP),
-        ('early_bird_enabled', ?, CURRENT_TIMESTAMP),
-        ('early_bird_discount_pct', ?, CURRENT_TIMESTAMP),
-        ('early_bird_fee_amount', ?, CURRENT_TIMESTAMP),
-        ('early_bird_deadline', ?, CURRENT_TIMESTAMP)`,
-      [
-        String(next.camp_fee_amount),
-        next.early_bird_enabled ? '1' : '0',
-        String(next.early_bird_discount_pct),
-        next.early_bird_fee_amount == null ? '' : String(next.early_bird_fee_amount),
-        next.early_bird_deadline,
-      ]
-    );
+    const upserts = [
+      ['camp_fee_amount', String(next.camp_fee_amount)],
+      ['early_bird_enabled', next.early_bird_enabled ? '1' : '0'],
+      ['early_bird_discount_pct', String(next.early_bird_discount_pct)],
+      ['early_bird_fee_amount', next.early_bird_fee_amount == null ? '' : String(next.early_bird_fee_amount)],
+      ['early_bird_deadline', next.early_bird_deadline],
+    ];
+    for (const [key, value] of upserts) {
+      await pool.query(
+        `INSERT INTO app_settings (setting_key, setting_value, updated_at)
+         VALUES (?, ?, CURRENT_TIMESTAMP)
+         ON CONFLICT (setting_key) DO UPDATE
+         SET setting_value = EXCLUDED.setting_value,
+             updated_at = CURRENT_TIMESTAMP`,
+        [key, value]
+      );
+    }
 
     const pricing = await getPricingConfig(pool);
     res.json({ success: true, pricing });
@@ -150,7 +155,7 @@ router.post('/create-admin',
       );
       res.status(201).json({ id: result.insertId, name, email, role });
     } catch (err) {
-      if (err.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'Email already exists' });
+      if (err.code === 'ER_DUP_ENTRY' || err.code === '23505') return res.status(409).json({ error: 'Email already exists' });
       res.status(500).json({ error: 'Server error' });
     }
   }

@@ -172,14 +172,14 @@ router.post('/',
           d.emergency_name || null, d.emergency_phone || null, d.emergency_relationship || null,
           d.last_avg_score || null, d.class_position || null, d.best_subject || null, d.favourite_subject || null, d.academic_goal || null,
           d.blood_group || null, d.genotype || null,
-          isTrueValue(d.condition_asthma) ? 1 : 0, isTrueValue(d.condition_epilepsy) ? 1 : 0, isTrueValue(d.condition_diabetes) ? 1 : 0,
-          isTrueValue(d.condition_hypertension) ? 1 : 0, isTrueValue(d.condition_heart) ? 1 : 0,
+          isTrueValue(d.condition_asthma), isTrueValue(d.condition_epilepsy), isTrueValue(d.condition_diabetes),
+          isTrueValue(d.condition_hypertension), isTrueValue(d.condition_heart),
           d.allergies || null, d.current_medications || null, d.past_injuries || null,
-          isTrueValue(d.on_medication) ? 1 : 0, d.medication_detail || null,
-          isTrueValue(d.physical_disability) ? 1 : 0, d.disability_detail || null,
+          isTrueValue(d.on_medication), d.medication_detail || null,
+          isTrueValue(d.physical_disability), d.disability_detail || null,
           d.last_medical_checkup || null, d.family_doctor || null, d.family_doctor_phone || null,
-          isTrueValue(d.consent_medical) ? 1 : 0, isTrueValue(d.consent_conduct) ? 1 : 0,
-          isTrueValue(d.consent_media) ? 1 : 0, isTrueValue(d.consent_indemnity) ? 1 : 0,
+          isTrueValue(d.consent_medical), isTrueValue(d.consent_conduct),
+          isTrueValue(d.consent_media), isTrueValue(d.consent_indemnity),
           files.passport_photo?.[0]?.path || null,
           files.birth_certificate?.[0]?.path || null,
           files.school_result?.[0]?.path || null,
@@ -190,7 +190,7 @@ router.post('/',
 
       const applicantId = result.insertId;
 
-      // Generate form number manually for SQLite
+      // Keep explicit form number assignment for deterministic response payload.
       const formNumber = `UI/SA/2026/${String(applicantId).padStart(4, '0')}`;
       await pool.query('UPDATE applicants SET form_number = ? WHERE id = ?', [formNumber, applicantId]);
 
@@ -257,7 +257,7 @@ router.get('/lookup', async (req, res) => {
     FROM applicants a
     LEFT JOIN payments p ON p.applicant_id = a.id
     WHERE LOWER(TRIM(a.guardian_email)) = LOWER(TRIM(?))
-    ORDER BY datetime(a.created_at) DESC, a.id DESC`,
+    ORDER BY a.created_at DESC, a.id DESC`,
     [email]
   );
 

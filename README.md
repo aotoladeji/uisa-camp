@@ -10,7 +10,7 @@ A complete registration, payment, and administration platform for the **Universi
 uisa-camp/
 ├── server/               ← Node.js + Express API
 │   ├── db/
-│   │   ├── schema.sql    ← Full MySQL schema
+│   │   ├── schema-postgres.sql ← Full PostgreSQL schema
 │   │   └── pool.js       ← DB connection pool
 │   ├── middleware/
 │   │   ├── auth.js       ← JWT authentication
@@ -51,7 +51,7 @@ uisa-camp/
 |-------------|----------|
 | Node.js     | ≥ 18.x   |
 | npm         | ≥ 9.x    |
-| MySQL       | Optional |
+| PostgreSQL  | 14+      |
 
 ---
 
@@ -59,9 +59,15 @@ uisa-camp/
 
 ### 1. Database
 
-Default local runtime uses SQLite and auto-creates `server/db/uisa_camp.db` on first server start.
+Create a PostgreSQL database named `uisa_camp` and grant your app user table/trigger privileges.
 
-If you want a MySQL deployment, use `server/db/schema.sql` and point your environment values to MySQL.
+The server auto-initializes all required tables/triggers from `server/db/schema-postgres.sql` on startup.
+
+Example:
+
+```sql
+CREATE DATABASE uisa_camp;
+```
 
 ### 2. Server Environment
 
@@ -74,9 +80,12 @@ Edit `.env` with your values:
 
 ```env
 DB_HOST=localhost
-DB_USER=root
+DB_PORT=5432
+DB_USER=postgres
 DB_PASSWORD=your_password
 DB_NAME=uisa_camp
+DB_SCHEMA=uisa_app
+DB_SSL=false
 
 JWT_SECRET=your_very_long_random_secret_here
 
