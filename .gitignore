@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+client/node_modules/
+server/node_modules/
+
+# Build artifacts
+client/build/
+coverage/
+
+# Environment and local secrets
+.env
+.env.*
+!.env.example
+server/.env
+client/.env
+
+# Runtime data and uploads
+server/db/uisa_camp.db
+server/uploads/documents/*
+server/uploads/photos/*
+server/uploads/receipts/*
+!server/uploads/documents/.gitkeep
+!server/uploads/photos/.gitkeep
+!server/uploads/receipts/.gitkeep
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

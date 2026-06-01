@@ -1,0 +1,39 @@
+<svg width="210" height="250" viewBox="0 0 210 250" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="crossBlue" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4E56D9"/>
+      <stop offset="1" stop-color="#1E2E9E"/>
+    </linearGradient>
+    <linearGradient id="ribbonGold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#DEC98B"/>
+      <stop offset="1" stop-color="#C8AE67"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Shield -->
+  <path d="M56 16H154L166 28V130L105 192L44 130V28L56 16Z" fill="#121212" stroke="#D4D9E2" stroke-width="4"/>
+  <path d="M62 24H148L158 34V126L105 181L52 126V34L62 24Z" fill="#262626"/>
+
+  <!-- Blue cross / Y form -->
+  <path d="M103 56L69 26H88L106 49L124 26H143L109 56V150H103V56Z" fill="url(#crossBlue)"/>
+  <path d="M96 56L63 26H75L101 52V150H96V56Z" fill="#E8EAFF" opacity=".9"/>
+
+  <!-- Sun rays -->
+  <g fill="#CEB16A">
+    <path d="M105 64L111 81L129 77L116 90L129 102L111 98L105 115L99 98L81 102L94 90L81 77L99 81Z"/>
+    <path d="M105 58L109 70L121 67L112 76L121 85L109 82L105 94L101 82L89 85L98 76L89 67L101 70Z"/>
+  </g>
+
+  <!-- Open book -->
+  <path d="M74 82C82 78 90 78 99 82V103C90 99 82 99 74 103V82Z" fill="#F3F3F3" stroke="#BABABA" stroke-width="1.5"/>
+  <path d="M111 82C120 78 128 78 136 82V103C128 99 120 99 111 103V82Z" fill="#F3F3F3" stroke="#BABABA" stroke-width="1.5"/>
+  <path d="M103 82H108V103H103V82Z" fill="#DADADA"/>
+  <path d="M73 102H137V109H73V102Z" fill="#D72626"/>
+
+  <!-- Ribbon -->
+  <path d="M34 160C44 149 58 148 70 156L64 171C52 166 43 167 37 176C30 172 29 165 34 160Z" fill="url(#ribbonGold)" stroke="#8D7B4F" stroke-width="2"/>
+  <path d="M176 160C166 149 152 148 140 156L146 171C158 166 167 167 173 176C180 172 181 165 176 160Z" fill="url(#ribbonGold)" stroke="#8D7B4F" stroke-width="2"/>
+  <path d="M48 156C72 147 138 147 162 156C168 160 168 171 160 176C136 189 74 189 50 176C42 171 42 160 48 156Z" fill="url(#ribbonGold)" stroke="#8D7B4F" stroke-width="2"/>
+  <path d="M60 161C79 155 131 155 150 161C154 163 154 168 149 170C130 176 80 176 61 170C56 168 56 163 60 161Z" fill="#E7D39A"/>
+  <text x="105" y="171" text-anchor="middle" font-family="Outfit, Arial, sans-serif" font-size="17" fill="#0E1F3C" font-weight="800">RECTE SAPERE FONS</text>
+</svg>
