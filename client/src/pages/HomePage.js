@@ -64,6 +64,7 @@ export default function HomePage() {
         <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 64 }}>
           <BrandLogo width={230} compact />
           <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            <Link to="/admin/login" className="btn btn-ghost btn-sm">Admin</Link>
             <Link to="/status" className="btn btn-ghost btn-sm">Check Status</Link>
             <Link to="/register" className="btn btn-gold btn-sm">Register Now</Link>
           </div>

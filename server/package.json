@@ -8,6 +8,14 @@
     "dev": "nodemon index.js",
     "test": "node --test ./test"
   },
+  "nodemonConfig": {
+    "ignore": [
+      "db/*.db",
+      "db/*.db.lock",
+      "uploads/**",
+      "*.log"
+    ]
+  },
   "dependencies": {
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",

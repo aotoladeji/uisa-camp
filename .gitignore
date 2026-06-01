@@ -5,6 +5,7 @@ server/node_modules/
 
 # Build artifacts
 client/build/
+release/
 coverage/
 
 # Environment and local secrets

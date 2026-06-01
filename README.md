@@ -196,18 +196,38 @@ Automated emails sent on:
 ## Deployment (Production)
 
 ```bash
-# Build React app
-npm run build
+# 1) Build frontend release package
+# Point frontend to your hosted backend API before build
+set REACT_APP_API_URL=https://api.yourdomain.com/api
+npm run release:build
 
-# Serve with nginx (point to client/build) + PM2 for Node
-pm2 start server/index.js --name uisa-server
+# 2) Deploy frontend package to S3 bucket
+# Option A: use env var
+set S3_BUCKET=your-bucket-name
+npm run release:s3 -- --region us-east-1 --website
 
-# Environment
-NODE_ENV=production
-CLIENT_URL=https://yourdomain.com
+# Option B: pass bucket directly
+npm run release:s3 -- --bucket your-bucket-name --region us-east-1 --website
 ```
 
-Set `PORT=5000` or behind nginx reverse proxy on `/api`.
+Notes:
+- Frontend output is published from `release/web`.
+- `--website` configures S3 website index and error documents to `index.html` for SPA routing.
+- For CloudFront private-bucket setups, use custom error responses (`403/404 -> /index.html`) instead of S3 website mode.
+
+Backend API is not static and cannot run on S3. Host backend separately (EC2, ECS, Render, Railway, etc):
+
+```bash
+pm2 start server/index.js --name uisa-server
+```
+
+Backend environment:
+
+```bash
+NODE_ENV=production
+CLIENT_URL=https://your-frontend-domain
+PORT=5000
+```
 
 ---
 

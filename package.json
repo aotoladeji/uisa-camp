@@ -10,6 +10,8 @@
     "dev:client": "npm start --prefix client",
     "test:server": "npm test --prefix server",
     "build": "npm run build --prefix client",
+    "release:build": "npm run build --prefix client && node scripts/prepare-release.mjs",
+    "release:s3": "node scripts/deploy-s3.mjs",
     "start": "npm start --prefix server"
   },
   "devDependencies": {
