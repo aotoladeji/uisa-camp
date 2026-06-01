@@ -32,10 +32,9 @@ export default function AdminLayout({ children }) {
       {/* Logo */}
       <div style={{ padding: '24px 20px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <BrandLogo width={138} compact darkBackground />
-          <div>
-            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, color: 'white', fontSize: 14, lineHeight: 1.1 }}>UI Sport Academy</div>
-            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 1 }}>Camp 2026</div>
+          <BrandLogo width={110} compact darkBackground />
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, color: 'white', fontSize: 14, lineHeight: 1.15, whiteSpace: 'normal' }}>Sport Academy</div>
           </div>
         </div>
       </div>

@@ -391,7 +391,7 @@ export default function RegisterPage() {
                   </Select>
                 </Field>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                 <Field label="State of Origin">
                   <Select value={data.state_of_origin} onChange={e => setStateOfOrigin(e.target.value)} disabled={!data.nationality}>
                     <option value="">{data.nationality ? 'Select state / province' : 'Select nationality first'}</option>
