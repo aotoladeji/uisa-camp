@@ -99,7 +99,7 @@ export default function AdminLogin() {
         </div>
 
         <p style={{ textAlign: 'center', color: 'rgba(255,255,255,0.35)', fontSize: 12, marginTop: 20 }}>
-          Default: Admin / admin123
+          Any Issues? contact MIS Department UI
         </p>
       </div>
     </div>

@@ -128,7 +128,6 @@ export default function StatusPage() {
       </div>
 
       <div class="foot">
-        This is a system-generated admission letter for verification and onboarding purposes.
       </div>
     </div>
   </body>
