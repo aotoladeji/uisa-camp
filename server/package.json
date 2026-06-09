@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "test": "node --test ./test"
+    "test": "node --test ./test/api.smoke.test.js"
   },
   "nodemonConfig": {
     "ignore": [
@@ -26,10 +26,11 @@
     "multer": "^1.4.5-lts.1",
     "nodemailer": "^6.9.13",
     "pdf-parse": "^2.4.5",
-    "pg": "^8.13.1",
     "sharp": "^0.34.5",
     "tesseract.js": "^7.0.0",
     "uisa-camp": "file:..",
+    "mysql2": "^3.5.0",
+    "better-sqlite3": "^8.3.0",
     "uuid": "^10.0.0"
   },
   "devDependencies": {

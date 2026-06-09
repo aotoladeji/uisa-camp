@@ -74,9 +74,9 @@ router.patch('/settings/auto-accept-mode',
     await pool.query(
       `INSERT INTO app_settings (setting_key, setting_value, updated_at)
        VALUES ('auto_accept_mode', ?, CURRENT_TIMESTAMP)
-       ON CONFLICT (setting_key) DO UPDATE
-       SET setting_value = EXCLUDED.setting_value,
-           updated_at = CURRENT_TIMESTAMP`,
+       ON DUPLICATE KEY UPDATE
+         setting_value = VALUES(setting_value),
+         updated_at = CURRENT_TIMESTAMP`,
       [mode]
     );
     res.json({ success: true, mode });
@@ -122,9 +122,9 @@ router.patch('/settings/pricing',
       await pool.query(
         `INSERT INTO app_settings (setting_key, setting_value, updated_at)
          VALUES (?, ?, CURRENT_TIMESTAMP)
-         ON CONFLICT (setting_key) DO UPDATE
-         SET setting_value = EXCLUDED.setting_value,
-             updated_at = CURRENT_TIMESTAMP`,
+         ON DUPLICATE KEY UPDATE
+           setting_value = VALUES(setting_value),
+           updated_at = CURRENT_TIMESTAMP`,
         [key, value]
       );
     }
