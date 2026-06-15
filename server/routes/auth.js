@@ -72,11 +72,8 @@ router.patch('/settings/auto-accept-mode',
 
     const { mode } = req.body;
     await pool.query(
-      `INSERT INTO app_settings (setting_key, setting_value, updated_at)
-       VALUES ('auto_accept_mode', ?, CURRENT_TIMESTAMP)
-       ON DUPLICATE KEY UPDATE
-         setting_value = VALUES(setting_value),
-         updated_at = CURRENT_TIMESTAMP`,
+      `INSERT OR REPLACE INTO app_settings (setting_key, setting_value, updated_at)
+       VALUES ('auto_accept_mode', ?, CURRENT_TIMESTAMP)`,
       [mode]
     );
     res.json({ success: true, mode });
@@ -120,11 +117,8 @@ router.patch('/settings/pricing',
     ];
     for (const [key, value] of upserts) {
       await pool.query(
-        `INSERT INTO app_settings (setting_key, setting_value, updated_at)
-         VALUES (?, ?, CURRENT_TIMESTAMP)
-         ON DUPLICATE KEY UPDATE
-           setting_value = VALUES(setting_value),
-           updated_at = CURRENT_TIMESTAMP`,
+        `INSERT OR REPLACE INTO app_settings (setting_key, setting_value, updated_at)
+         VALUES (?, ?, CURRENT_TIMESTAMP)`,
         [key, value]
       );
     }

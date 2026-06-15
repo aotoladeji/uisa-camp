@@ -456,7 +456,7 @@ router.patch('/:id/status', authenticate, requireRole('admin','super_admin'), as
 
   // Send appropriate email
   const [applRows] = await pool.query(
-    'SELECT *, CONCAT(first_name, \' \', surname) AS full_name FROM applicants WHERE id = ?',
+    'SELECT *, first_name || \' \' || surname AS full_name FROM applicants WHERE id = ?',
     [req.params.id]
   );
   const appl = applRows[0];

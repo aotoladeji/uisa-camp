@@ -1,80 +1,123 @@
 const fs = require('fs');
 const path = require('path');
-const mysql = require('mysql2/promise');
+const sqlite3 = require('sqlite3').verbose();
 require('dotenv').config();
 
-const dbName = String(process.env.DB_NAME || process.env.DB_SCHEMA || 'uisa_camp').trim();
-if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(dbName)) {
-  throw new Error('Invalid DB_NAME or DB_SCHEMA. Use only letters, numbers, and underscores.');
+const dbPath = process.env.DB_PATH || path.join(__dirname, 'uisa_camp.db');
+
+// Create a wrapper to make sqlite3 compatible with the mysql2/promise API
+class SQLitePool {
+  constructor(filePath) {
+    this.db = new sqlite3.Database(filePath, (err) => {
+      if (err) {
+        console.error('Error opening database:', err);
+      } else {
+        console.log('Connected to SQLite database:', filePath);
+        // Enable foreign keys
+        this.db.run('PRAGMA foreign_keys = ON', (err) => {
+          if (err) console.error('Error enabling foreign keys:', err);
+        });
+      }
+    });
+  }
+
+  query(sql, params = []) {
+    return new Promise((resolve, reject) => {
+      // Handle different query types
+      if (sql.trim().toUpperCase().startsWith('SELECT')) {
+        this.db.all(sql, params, (err, rows) => {
+          if (err) reject(err);
+          else resolve([rows || []]);
+        });
+      } else {
+        this.db.run(sql, params, function(err) {
+          if (err) reject(err);
+          else resolve([{ insertId: this.lastID, affectedRows: this.changes }]);
+        });
+      }
+    });
+  }
+
+  end() {
+    return new Promise((resolve, reject) => {
+      this.db.close((err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+  }
 }
 
-const poolConfig = {
-  host: process.env.DB_HOST || 'localhost',
-  port: parseInt(process.env.DB_PORT || '3306', 10),
-  user: process.env.DB_USER || 'root',
-  password: `${process.env.DB_PASSWORD ?? ''}`,
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-  multipleStatements: true,
-  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
-};
-
-const poolConnection = mysql.createPool({ ...poolConfig, database: dbName });
-const bootstrapConnection = mysql.createPool({ ...poolConfig });
+const pool = new SQLitePool(dbPath);
 
 function normalizeDbError(err) {
   return err;
 }
 
 async function ensureDatabaseExists() {
-  try {
-    await poolConnection.query('SELECT 1');
-  } catch (err) {
-    if (err && err.code === 'ER_BAD_DB_ERROR') {
-      await bootstrapConnection.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`);
-      return;
-    }
-    throw err;
-  }
+  // SQLite creates the database automatically when opened
+  return;
 }
 
 async function ensureSchema() {
-  const schemaPath = path.join(__dirname, 'schema-mysql.sql');
+  const schemaPath = path.join(__dirname, 'schema-sqlite.sql');
   const schema = fs.readFileSync(schemaPath, 'utf8');
-  await poolConnection.query(schema);
+  
+  // Split the schema into individual statements, handling comments and whitespace
+  const lines = schema.split('\n');
+  let currentStatement = '';
+  
+  for (let line of lines) {
+    // Skip comments and empty lines
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('--')) continue;
+    
+    currentStatement += ' ' + line;
+    
+    // Statement ends with semicolon
+    if (trimmed.endsWith(';')) {
+      const statement = currentStatement.trim();
+      if (statement && !statement.startsWith('--')) {
+        try {
+          await pool.query(statement);
+        } catch (err) {
+          // Ignore "table already exists" errors
+          if (!err.message.includes('already exists')) {
+            console.warn('Schema execution warning:', err.message);
+          }
+        }
+      }
+      currentStatement = '';
+    }
+  }
 }
 
 const dbReady = (async () => {
+const dbReady = (async () => {
   try {
     await ensureDatabaseExists();
-    await poolConnection.query('SELECT 1');
+    await pool.query('SELECT 1');
     await ensureSchema();
-    console.log('✅ MySQL connected and schema ready');
+    console.log('✅ SQLite connected and schema ready');
   } catch (err) {
-    console.error('❌ MySQL initialization failed:', err.message);
+    console.error('❌ SQLite initialization failed:', err.message);
     process.exit(1);
   }
 })();
 
 async function runQuery(executor, sql, params = []) {
   await dbReady;
-  const trimmed = sql.trim().toUpperCase();
-  const isSelect = trimmed.startsWith('SELECT');
 
   try {
-    const [rows] = await executor.query(sql, params);
-    if (isSelect) return [rows];
-
-    return [{ affectedRows: rows.affectedRows || 0, insertId: rows.insertId || 0 }];
+    return await executor.query(sql, params);
   } catch (err) {
     throw normalizeDbError(err);
   }
 }
 
-const pool = {
+const poolWrapper = {
   async query(sql, params = []) {
-    return runQuery(poolConnection, sql, params);
+    return runQuery(pool, sql, params);
   },
 
   async execute(sql, params = []) {
@@ -83,29 +126,26 @@ const pool = {
 
   async getConnection() {
     await dbReady;
-    const client = await poolConnection.getConnection();
-
+    // SQLite doesn't have connection pooling, return the pool itself
     return {
-      query: (sql, params = []) => runQuery(client, sql, params),
-      execute: (sql, params = []) => runQuery(client, sql, params),
-      beginTransaction: async () => client.query('BEGIN'),
-      commit: async () => client.query('COMMIT'),
-      rollback: async () => client.query('ROLLBACK'),
-      release: () => client.release(),
+      query: (sql, params = []) => runQuery(pool, sql, params),
+      execute: (sql, params = []) => runQuery(pool, sql, params),
+      beginTransaction: async () => pool.query('BEGIN'),
+      commit: async () => pool.query('COMMIT'),
+      rollback: async () => pool.query('ROLLBACK'),
+      release: () => {},
     };
   },
 };
 
 process.on('SIGINT', async () => {
-  await poolConnection.end();
-  await bootstrapConnection.end();
+  await pool.end();
   process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
-  await poolConnection.end();
-  await bootstrapConnection.end();
+  await pool.end();
   process.exit(0);
 });
 
-module.exports = pool;
+module.exports = poolWrapper;

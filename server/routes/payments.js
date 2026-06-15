@@ -31,20 +31,20 @@ router.post('/submit',
       let rows = [];
       if (applicant_id) {
         [rows] = await pool.query(
-          "SELECT id, guardian_email, form_number, CONCAT(first_name, ' ', surname) AS full_name, guardian_name, sport_selection FROM applicants WHERE id = ? AND LOWER(TRIM(guardian_email)) = LOWER(TRIM(?))",
+          "SELECT id, guardian_email, form_number, first_name || ' ' || surname AS full_name, guardian_name, sport_selection FROM applicants WHERE id = ? AND LOWER(TRIM(guardian_email)) = LOWER(TRIM(?))",
           [parseInt(applicant_id, 10), guardian_email]
         );
       }
       if (!rows.length && form_number) {
         [rows] = await pool.query(
-          "SELECT id, guardian_email, form_number, CONCAT(first_name, ' ', surname) AS full_name, guardian_name, sport_selection FROM applicants WHERE form_number = ? AND LOWER(TRIM(guardian_email)) = LOWER(TRIM(?))",
+          "SELECT id, guardian_email, form_number, first_name || ' ' || surname AS full_name, guardian_name, sport_selection FROM applicants WHERE form_number = ? AND LOWER(TRIM(guardian_email)) = LOWER(TRIM(?))",
           [form_number, guardian_email]
         );
       }
       if (!rows.length && guardian_email) {
         // Fallback for stale payment links: pick the latest application for this guardian email.
         [rows] = await pool.query(
-          `SELECT id, guardian_email, form_number, CONCAT(first_name, ' ', surname) AS full_name, guardian_name, sport_selection
+          `SELECT id, guardian_email, form_number, first_name || ' ' || surname AS full_name, guardian_name, sport_selection
            FROM applicants
            WHERE LOWER(TRIM(guardian_email)) = LOWER(TRIM(?))
            ORDER BY created_at DESC, id DESC
@@ -185,7 +185,7 @@ router.get('/', authenticate, async (req, res) => {
 
   const [rows] = await pool.query(`
     SELECT p.*, a.form_number, a.surname, a.first_name, a.guardian_email,
-           a.sport_selection, CONCAT(a.first_name,' ',a.surname) AS full_name
+           a.sport_selection, a.first_name || ' ' || a.surname AS full_name
     FROM payments p
     JOIN applicants a ON a.id = p.applicant_id
     ${where}
@@ -206,7 +206,7 @@ router.get('/', authenticate, async (req, res) => {
 router.get('/:id', authenticate, async (req, res) => {
   const [rows] = await pool.query(`
     SELECT p.*, a.form_number, a.surname, a.first_name, a.guardian_email, a.guardian_phone,
-           a.sport_selection, CONCAT(a.first_name,' ',a.surname) AS full_name
+           a.sport_selection, a.first_name || ' ' || a.surname AS full_name
     FROM payments p JOIN applicants a ON a.id=p.applicant_id
     WHERE p.id=?`, [req.params.id]
   );
@@ -233,7 +233,7 @@ router.patch('/:id/verify', authenticate, requireRole('admin','verifier','super_
   const [[pmt]] = await pool.query(`
     SELECT p.amount_paid, a.id AS applicant_id, a.form_number,
            a.guardian_email, a.guardian_name,
-           CONCAT(a.first_name,' ',a.surname) AS full_name
+           a.first_name || ' ' || a.surname AS full_name
     FROM payments p JOIN applicants a ON a.id=p.applicant_id WHERE p.id=?`,
     [req.params.id]
   );

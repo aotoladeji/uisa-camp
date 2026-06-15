@@ -4,6 +4,39 @@ import toast from 'react-hot-toast';
 import { Lock, Eye, EyeOff, ArrowLeft, Check } from 'lucide-react';
 import api from '../../utils/api';
 
+const PasswordInput = ({ label, name, value, show, onToggle, onChange }) => (
+  <div className="form-field">
+    <label>{label} <span className="req">*</span></label>
+    <div style={{ position: 'relative' }}>
+      <input
+        className="form-input"
+        type={show ? 'text' : 'password'}
+        value={value}
+        onChange={onChange}
+        required
+        style={{ paddingRight: 42 }}
+      />
+      <button
+        type="button"
+        onClick={onToggle}
+        style={{
+          position: 'absolute',
+          right: 12,
+          top: '50%',
+          transform: 'translateY(-50%)',
+          background: 'none',
+          border: 'none',
+          color: 'var(--text-3)',
+          cursor: 'pointer',
+          display: 'flex'
+        }}
+      >
+        {show ? <EyeOff size={16} /> : <Eye size={16} />}
+      </button>
+    </div>
+  </div>
+);
+
 export default function ChangePassword() {
   const navigate = useNavigate();
   const [form, setForm] = useState({
@@ -53,39 +86,6 @@ export default function ChangePassword() {
     }
   };
 
-  const PasswordInput = ({ label, name, value, show, onToggle }) => (
-    <div className="form-field">
-      <label>{label} <span className="req">*</span></label>
-      <div style={{ position: 'relative' }}>
-        <input
-          className="form-input"
-          type={show ? 'text' : 'password'}
-          value={value}
-          onChange={e => setForm(p => ({ ...p, [name]: e.target.value }))}
-          required
-          style={{ paddingRight: 42 }}
-        />
-        <button
-          type="button"
-          onClick={onToggle}
-          style={{
-            position: 'absolute',
-            right: 12,
-            top: '50%',
-            transform: 'translateY(-50%)',
-            background: 'none',
-            border: 'none',
-            color: 'var(--text-3)',
-            cursor: 'pointer',
-            display: 'flex'
-          }}
-        >
-          {show ? <EyeOff size={16} /> : <Eye size={16} />}
-        </button>
-      </div>
-    </div>
-  );
-
   return (
     <div className="page-enter">
       {/* Header */}
@@ -133,6 +133,7 @@ export default function ChangePassword() {
             value={form.current_password}
             show={showPasswords.current}
             onToggle={() => setShowPasswords(p => ({ ...p, current: !p.current }))}
+            onChange={e => setForm(p => ({ ...p, current_password: e.target.value }))}
           />
 
           <div style={{ height: 1, background: 'var(--border)', margin: '8px 0' }} />
@@ -143,6 +144,7 @@ export default function ChangePassword() {
             value={form.new_password}
             show={showPasswords.new}
             onToggle={() => setShowPasswords(p => ({ ...p, new: !p.new }))}
+            onChange={e => setForm(p => ({ ...p, new_password: e.target.value }))}
           />
 
           <PasswordInput
@@ -151,6 +153,7 @@ export default function ChangePassword() {
             value={form.confirm_password}
             show={showPasswords.confirm}
             onToggle={() => setShowPasswords(p => ({ ...p, confirm: !p.confirm }))}
+            onChange={e => setForm(p => ({ ...p, confirm_password: e.target.value }))}
           />
 
           {/* Password Requirements */}
