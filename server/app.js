@@ -6,8 +6,8 @@ const path        = require('path');
 
 const app = express();
 
-const defaultClient = process.env.CLIENT_URL || 'http://localhost:3000';
-const devAlternate = 'http://localhost:3001';
+const defaultClient = (process.env.CLIENT_URL || 'http://localhost:3000').replace(/\/$/, '');
+const devAlternate  = 'http://localhost:3001';
 const allowedOrigins = [defaultClient, devAlternate];
 
 app.use((req, res, next) => {
@@ -63,7 +63,9 @@ app.use('/api/payments',   require('./routes/payments'));
 // Health check
 app.get('/api/health', (req, res) => res.json({
   status: 'ok', time: new Date().toISOString(),
-  env: process.env.NODE_ENV
+  env: process.env.NODE_ENV,
+  db:  process.env.DATABASE_URL ? 'remote' : 'local',
+  jwt: process.env.JWT_SECRET   ? 'set'    : 'MISSING',
 }));
 
 // Error handler

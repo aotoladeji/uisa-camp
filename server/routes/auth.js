@@ -30,6 +30,11 @@ router.post('/login',
 
       await pool.query('UPDATE admin_users SET last_login = CURRENT_TIMESTAMP WHERE id = ?', [admin.id]);
 
+      if (!process.env.JWT_SECRET) {
+        console.error('[POST /api/auth/login] JWT_SECRET env var is not set');
+        return res.status(500).json({ error: 'Server misconfiguration: JWT_SECRET is not set' });
+      }
+
       const token = jwt.sign(
         { id: admin.id, username: admin.username, role: admin.role },
         process.env.JWT_SECRET,
