@@ -22,8 +22,7 @@
   },
   "scripts": {
     "start": "react-scripts start",
-    "build": "react-scripts build",
-    "vercel-build": "npm install --prefix ../server && react-scripts build"
+    "build": "react-scripts build"
   },
   "proxy": "http://localhost:5001",
   "browserslist": {

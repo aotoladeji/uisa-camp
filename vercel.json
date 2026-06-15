@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "buildCommand": "npm install --prefix client && npm install --prefix server && cd client && npx react-scripts build",
+  "outputDirectory": "client/build",
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/index" },
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ],
+  "functions": {
+    "api/index.js": {
+      "includeFiles": "server/**"
+    }
+  }
+}
