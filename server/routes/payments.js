@@ -26,6 +26,9 @@ router.post('/submit',
 
     if (!req.file) return res.status(400).json({ error: 'Receipt file is required' });
 
+    // On Vercel (memory storage) req.file.path is undefined — store a marker instead
+    const receiptPath = req.file.path || `memory:${req.file.originalname}:${Date.now()}`;
+
     try {
       // Verify applicant exists by ID or form number to support both payment-link flows.
       let rows = [];
@@ -81,7 +84,7 @@ router.post('/submit',
             verification_status = 'Pending', updated_at = CURRENT_TIMESTAMP
           WHERE applicant_id = ?`,
           [submittedAmount, selectedPlan, discount, gross,
-           submittedRef, submittedDate, req.file.path, applicant_id]
+           submittedRef, submittedDate, receiptPath, applicant_id]
         );
       } else {
         await pool.query(`
@@ -90,7 +93,7 @@ router.post('/submit',
              transaction_ref, payment_date, receipt_path, bank_name, account_number)
           VALUES (?,?,?,?,?,?,?,?,?,?)`,
           [applicant_id, submittedAmount, selectedPlan,
-           discount, gross, submittedRef, submittedDate, req.file.path,
+           discount, gross, submittedRef, submittedDate, receiptPath,
            'Access Bank', null]
         );
       }
@@ -116,7 +119,7 @@ router.post('/submit',
       // Process OCR and email after responding to reduce submit latency.
       setImmediate(async () => {
         try {
-          const extracted = await extractPaymentDetails(req.file.path);
+          const extracted = await extractPaymentDetails(receiptPath);
 
           const [paymentRows] = await pool.query(
             `SELECT id, transaction_ref, receipt_transaction_ref, amount_paid, receipt_amount,

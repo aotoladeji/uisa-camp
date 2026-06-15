@@ -1,8 +1,12 @@
-const Tesseract = require('tesseract.js');
-const sharp = require('sharp');
 const fs = require('fs');
 const path = require('path');
-const pdfParse = require('pdf-parse');
+
+// Native modules (sharp, tesseract.js) are not available on Vercel serverless —
+// load them lazily and fall back gracefully if they fail to load.
+let sharp, Tesseract, pdfParse;
+try { sharp = require('sharp'); } catch (_) { sharp = null; }
+try { Tesseract = require('tesseract.js'); } catch (_) { Tesseract = null; }
+try { pdfParse = require('pdf-parse'); } catch (_) { pdfParse = null; }
 
 function emptyExtracted() {
   return {
@@ -177,6 +181,18 @@ async function ocrPdfPage(imagePath, pageIndex) {
  * @returns {Promise<Object>} Extracted payment details
  */
 async function extractPaymentDetails(imagePath) {
+  // Skip OCR entirely on Vercel or when native modules are unavailable
+  if (!sharp || !Tesseract) {
+    console.log('OCR skipped: native modules not available in this environment.');
+    return emptyExtracted();
+  }
+
+  // Also skip when using memory storage (no file path on disk)
+  if (!imagePath || !fs.existsSync(imagePath)) {
+    console.log('OCR skipped: file not on disk (memory storage mode).');
+    return emptyExtracted();
+  }
+
   try {
     const ext = path.extname(imagePath).toLowerCase();
     let text = '';

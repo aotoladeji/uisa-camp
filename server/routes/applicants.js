@@ -180,9 +180,9 @@ router.post('/',
           d.last_medical_checkup || null, d.family_doctor || null, d.family_doctor_phone || null,
           isTrueValue(d.consent_medical), isTrueValue(d.consent_conduct),
           isTrueValue(d.consent_media), isTrueValue(d.consent_indemnity),
-          files.passport_photo?.[0]?.path || null,
-          files.birth_certificate?.[0]?.path || null,
-          files.school_result?.[0]?.path || null,
+          files.passport_photo?.[0]?.path   || (files.passport_photo?.[0]   ? `memory:${files.passport_photo[0].originalname}:${Date.now()}` : null),
+          files.birth_certificate?.[0]?.path || (files.birth_certificate?.[0] ? `memory:${files.birth_certificate[0].originalname}:${Date.now()}` : null),
+          files.school_result?.[0]?.path    || (files.school_result?.[0]    ? `memory:${files.school_result[0].originalname}:${Date.now()}` : null),
           initialStatus,
           req.ip
         ]
