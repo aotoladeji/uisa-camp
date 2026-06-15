@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { ChevronLeft, ChevronRight, Check, Upload, X } from 'lucide-react';
 import api from '../utils/api';
@@ -63,6 +63,7 @@ export default function RegisterPage() {
   const [result, setResult]   = useState(null);
   const [reviewing, setReviewing] = useState(false);
   const [acceptedPayload, setAcceptedPayload] = useState(null);
+  const [redirectUrl, setRedirectUrl] = useState('');
   const [locationLib, setLocationLib] = useState(null);
 
   useEffect(() => {
@@ -186,11 +187,8 @@ export default function RegisterPage() {
       setReviewing(true);
       setTimeout(() => {
         setReviewing(false);
-        if (res.auto_accepted || res.status === 'Admitted') {
-          setAcceptedPayload({ ...res, guardian_email: data.guardian_email });
-          return;
-        }
-        setResult(res);
+        const paymentUrl = res.payment_url || `/payment?form_number=${encodeURIComponent(res.form_number || '')}&email=${encodeURIComponent(data.guardian_email || '')}`;
+        setRedirectUrl(paymentUrl);
       }, 2600);
     } catch (err) {
       toast.error(err.response?.data?.error || 'Registration failed. Please try again.');
@@ -241,6 +239,10 @@ export default function RegisterPage() {
       </span>
     </label>
   );
+
+  if (redirectUrl) {
+    return <Navigate to={redirectUrl} replace />;
+  }
 
   if (reviewing) {
     return (

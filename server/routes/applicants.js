@@ -199,6 +199,8 @@ router.post('/',
       const earlyBird = pricing.early_bird_active;
       const amount = earlyBird ? pricing.computed_early_bird_fee : pricing.regular_fee;
 
+      const paymentUrl = `/payment?form_number=${encodeURIComponent(formNumber)}&email=${encodeURIComponent(d.guardian_email || '')}`;
+
       res.status(201).json({
         success: true,
         applicant_id: applicantId,
@@ -209,6 +211,8 @@ router.post('/',
         auto_accepted: autoAccepted,
         auto_accept_mode: autoAcceptMode,
         status: initialStatus,
+        can_proceed_to_payment: !!autoAccepted,
+        payment_url: paymentUrl,
         message: 'Registration successful. Check your email for payment instructions.'
       });
 

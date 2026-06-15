@@ -116,6 +116,7 @@ export default function StatusPage() {
         <div class="row"><div class="label">Category</div><div class="value">${category}</div></div>
         <div class="row"><div class="label">Resumption Date</div><div class="value"><strong>August 3, 2026</strong> (7:00 AM - 9:00 AM)</div></div>
         <div class="row"><div class="label">Venue</div><div class="value">International School, University of Ibadan</div></div>
+        <div class="row"><div class="label">Payment</div><div class="value">To secure this provisional admission, please complete payment via our payment portal: <a href="${typeof window !== 'undefined' ? window.location.origin : ''}/payment?form_number=${encodeURIComponent(formNumber)}&email=${encodeURIComponent(app.guardian_email || '')}"><strong>Proceed to Payment</strong></a>. Alternatively, pay by bank transfer to Access Bank — Account Number: <strong>1805832892</strong>, Account Name: <strong>University of Ibadan MacArthur Grants</strong>. After payment, upload your receipt via the payment portal to complete verification.</div></div>
       </div>
 
       <p>

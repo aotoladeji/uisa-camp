@@ -93,7 +93,6 @@ async function ensureSchema() {
 }
 
 const dbReady = (async () => {
-const dbReady = (async () => {
   try {
     await ensureDatabaseExists();
     await pool.query('SELECT 1');
