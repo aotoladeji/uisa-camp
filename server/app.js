@@ -74,7 +74,7 @@ app.use((err, req, res, _next) => {
   if (err.message && err.message.includes('Only JPG')) {
     return res.status(400).json({ error: err.message });
   }
-  console.error('Unhandled error:', err);
+  console.error(`[${req.method}] ${req.path} — Unhandled error:`, err);
   res.status(500).json({ error: 'Internal server error' });
 });
 

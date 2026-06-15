@@ -1,20 +1,30 @@
-const fs = require('fs');
+const fs   = require('fs');
 const path = require('path');
 require('dotenv').config();
+
+const IS_VERCEL = process.env.VERCEL === '1';
 
 // ── Turso / libSQL (production) ───────────────────────────────────────────────
 if (process.env.DATABASE_URL) {
   const { createClient } = require('@libsql/client');
+
+  // Normalise the URL: Vercel dashboard sometimes has trailing spaces or
+  // people paste the https:// dashboard URL instead of libsql://
+  let dbUrl = String(process.env.DATABASE_URL).trim();
+  if (dbUrl.startsWith('https://')) {
+    dbUrl = dbUrl.replace(/^https:\/\//, 'libsql://');
+  }
+
   const client = createClient({
-    url: process.env.DATABASE_URL,
-    authToken: process.env.LIBSQL_TOKEN,
+    url:       dbUrl,
+    authToken: process.env.LIBSQL_TOKEN ? String(process.env.LIBSQL_TOKEN).trim() : undefined,
   });
 
   const libsqlPool = {
     async query(sql, params = []) {
       const res = await client.execute({ sql, args: params });
-      // Mimic mysql2 [rows] return shape
-      if (sql.trim().toUpperCase().startsWith('SELECT') || sql.trim().toUpperCase().startsWith('PRAGMA')) {
+      const upper = sql.trim().toUpperCase();
+      if (upper.startsWith('SELECT') || upper.startsWith('PRAGMA') || upper.startsWith('WITH')) {
         return [res.rows];
       }
       return [{ insertId: Number(res.lastInsertRowid ?? 0), affectedRows: res.rowsAffected ?? 0 }];
@@ -26,22 +36,34 @@ if (process.env.DATABASE_URL) {
       return {
         query:            (sql, params = []) => libsqlPool.query(sql, params),
         execute:          (sql, params = []) => libsqlPool.query(sql, params),
-        beginTransaction: async () => client.execute('BEGIN'),
-        commit:           async () => client.execute('COMMIT'),
-        rollback:         async () => client.execute('ROLLBACK'),
+        beginTransaction: async () => client.execute({ sql: 'BEGIN',    args: [] }),
+        commit:           async () => client.execute({ sql: 'COMMIT',   args: [] }),
+        rollback:         async () => client.execute({ sql: 'ROLLBACK', args: [] }),
         release:          () => {},
       };
     },
   };
 
-  console.log('✅ Using Turso/libSQL remote database');
+  console.log('✅ Using Turso/libSQL:', dbUrl.replace(/\/\/.*@/, '//[redacted]@'));
   module.exports = libsqlPool;
+
+} else if (IS_VERCEL) {
+
+  // Running on Vercel without DATABASE_URL — fail fast with a clear message
+  // rather than a cryptic 500 from a missing sqlite3 binary.
+  console.error('❌ DATABASE_URL is not set. Cannot start on Vercel without a remote database.');
+  const missingDbPool = {
+    async query()         { throw new Error('DATABASE_URL env var is not configured. Set it in your Vercel project settings.'); },
+    async execute()       { throw new Error('DATABASE_URL env var is not configured. Set it in your Vercel project settings.'); },
+    async getConnection() { throw new Error('DATABASE_URL env var is not configured. Set it in your Vercel project settings.'); },
+  };
+  module.exports = missingDbPool;
 
 } else {
 
-  // ── Local SQLite (development) ──────────────────────────────────────────────
+  // ── Local SQLite (development / self-hosted) ─────────────────────────────────
   const sqlite3 = require('sqlite3').verbose();
-  const dbPath = process.env.DB_PATH || path.join(__dirname, 'uisa_camp.db');
+  const dbPath  = process.env.DB_PATH || path.join(__dirname, 'uisa_camp.db');
 
   class SQLitePool {
     constructor(filePath) {
@@ -85,12 +107,10 @@ if (process.env.DATABASE_URL) {
 
   const pool = new SQLitePool(dbPath);
 
-  function normalizeDbError(err) { return err; }
-
   async function ensureSchema() {
     const schemaPath = path.join(__dirname, 'schema-sqlite.sql');
-    const schema = fs.readFileSync(schemaPath, 'utf8');
-    const lines = schema.split('\n');
+    const schema     = fs.readFileSync(schemaPath, 'utf8');
+    const lines      = schema.split('\n');
     let currentStatement = '';
     for (const line of lines) {
       const trimmed = line.trim();
@@ -125,20 +145,12 @@ if (process.env.DATABASE_URL) {
 
   async function runQuery(executor, sql, params = []) {
     await dbReady;
-    try {
-      return await executor.query(sql, params);
-    } catch (err) {
-      throw normalizeDbError(err);
-    }
+    return executor.query(sql, params);
   }
 
   const poolWrapper = {
-    async query(sql, params = []) {
-      return runQuery(pool, sql, params);
-    },
-    async execute(sql, params = []) {
-      return this.query(sql, params);
-    },
+    async query(sql, params = [])   { return runQuery(pool, sql, params); },
+    async execute(sql, params = []) { return this.query(sql, params); },
     async getConnection() {
       await dbReady;
       return {

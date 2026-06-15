@@ -41,7 +41,7 @@ router.post('/login',
         admin: { id: admin.id, name: admin.name, username: admin.username, email: admin.email, role: admin.role }
       });
     } catch (err) {
-      console.error(err);
+      console.error('[POST /api/auth/login] error:', err.message, err.code || '');
       res.status(500).json({ error: 'Server error' });
     }
   }
