@@ -1,7 +1,46 @@
 const fs = require('fs');
 const path = require('path');
-const sqlite3 = require('sqlite3').verbose();
 require('dotenv').config();
+
+// ── Turso / libSQL (production) ───────────────────────────────────────────────
+if (process.env.DATABASE_URL) {
+  const { createClient } = require('@libsql/client');
+  const client = createClient({
+    url: process.env.DATABASE_URL,
+    authToken: process.env.LIBSQL_TOKEN,
+  });
+
+  const libsqlPool = {
+    async query(sql, params = []) {
+      const res = await client.execute({ sql, args: params });
+      // Mimic mysql2 [rows] return shape
+      if (sql.trim().toUpperCase().startsWith('SELECT') || sql.trim().toUpperCase().startsWith('PRAGMA')) {
+        return [res.rows];
+      }
+      return [{ insertId: Number(res.lastInsertRowid ?? 0), affectedRows: res.rowsAffected ?? 0 }];
+    },
+    async execute(sql, params = []) {
+      return this.query(sql, params);
+    },
+    async getConnection() {
+      return {
+        query:            (sql, params = []) => libsqlPool.query(sql, params),
+        execute:          (sql, params = []) => libsqlPool.query(sql, params),
+        beginTransaction: async () => client.execute('BEGIN'),
+        commit:           async () => client.execute('COMMIT'),
+        rollback:         async () => client.execute('ROLLBACK'),
+        release:          () => {},
+      };
+    },
+  };
+
+  console.log('✅ Using Turso/libSQL remote database');
+  module.exports = libsqlPool;
+  return; // skip SQLite setup below
+}
+
+// ── Local SQLite (development) ────────────────────────────────────────────────
+const sqlite3 = require('sqlite3').verbose();
 
 const dbPath = process.env.DB_PATH || path.join(__dirname, 'uisa_camp.db');
 

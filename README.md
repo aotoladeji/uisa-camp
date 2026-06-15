@@ -202,7 +202,9 @@ Automated emails sent on:
 
 ---
 
-## Deployment (Production)
+## Deployment
+
+For hosting on **Turso** (recommended for beginners and cloud deployments), see [DEPLOY_TO_TURSO.md](DEPLOY_TO_TURSO.md).
 
 ```bash
 # 1) Build frontend release package
