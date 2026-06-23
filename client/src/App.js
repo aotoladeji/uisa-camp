@@ -4,10 +4,11 @@ import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
 // Public pages
-import HomePage         from './pages/HomePage';
-import RegisterPage     from './pages/RegisterPage';
-import PaymentPage      from './pages/PaymentPage';
-import StatusPage       from './pages/StatusPage';
+import HomePage              from './pages/HomePage';
+import RegisterPage          from './pages/RegisterPage';
+import PaymentPage           from './pages/PaymentPage';
+import StatusPage            from './pages/StatusPage';
+import UpdateDocumentsPage   from './pages/UpdateDocumentsPage';
 
 // Admin pages
 import AdminLogin       from './pages/admin/AdminLogin';
@@ -41,10 +42,11 @@ export default function App() {
         />
         <Routes>
           {/* Public */}
-          <Route path="/"          element={<HomePage />} />
-          <Route path="/register"  element={<RegisterPage />} />
-          <Route path="/payment"   element={<PaymentPage />} />
-          <Route path="/status"    element={<StatusPage />} />
+          <Route path="/"            element={<HomePage />} />
+          <Route path="/register"    element={<RegisterPage />} />
+          <Route path="/payment"     element={<PaymentPage />} />
+          <Route path="/status"      element={<StatusPage />} />
+          <Route path="/update-docs" element={<UpdateDocumentsPage />} />
 
           {/* Admin */}
           <Route path="/admin/login" element={<AdminLogin />} />

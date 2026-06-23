@@ -65,6 +65,8 @@ export default function RegisterPage() {
   const [acceptedPayload, setAcceptedPayload] = useState(null);
   const [redirectUrl, setRedirectUrl] = useState('');
   const [locationLib, setLocationLib] = useState(null);
+  const [autofillBanner, setAutofillBanner] = useState(null); // { record, dismissed }
+  const [autofillLoading, setAutofillLoading] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -169,7 +171,59 @@ export default function RegisterPage() {
   const next = () => { if (validateStep()) setStep(s => s + 1); };
   const back = () => setStep(s => s - 1);
 
+  // ── Autofill: look up guardian record when name + phone are provided ──────
+  useEffect(() => {
+    if (step !== 2) return;
+    const name  = data.guardian_name?.trim();
+    const phone = data.guardian_phone?.trim();
+    if (!name || phone.length < 7) return;
+    if (autofillBanner) return; // already found or dismissed
+
+    const timer = setTimeout(async () => {
+      setAutofillLoading(true);
+      try {
+        const { data: record } = await api.get('/applicants/lookup-guardian', {
+          params: { name, phone }
+        });
+        setAutofillBanner({ record, dismissed: false });
+      } catch {
+        // no match — silent
+      } finally {
+        setAutofillLoading(false);
+      }
+    }, 800); // debounce
+
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, data.guardian_name, data.guardian_phone]);
+
+  const applyAutofill = (record) => {
+    // Map DB record back to form fields (guardian + personal info only — not child-specific)
+    const filled = {
+      ...data,
+      guardian_title:        record.guardian_title        || data.guardian_title,
+      guardian_name:         record.guardian_name         || data.guardian_name,
+      guardian_relationship: record.guardian_relationship || data.guardian_relationship,
+      guardian_phone:        record.guardian_phone        || data.guardian_phone,
+      guardian_whatsapp:     record.guardian_whatsapp     || data.guardian_whatsapp,
+      guardian_email:        record.guardian_email        || data.guardian_email,
+      guardian_occupation:   record.guardian_occupation   || data.guardian_occupation,
+      guardian_office_address: record.guardian_office_address || data.guardian_office_address,
+      emergency_name:        record.emergency_name        || data.emergency_name,
+      emergency_phone:       record.emergency_phone       || data.emergency_phone,
+      emergency_relationship: record.emergency_relationship || data.emergency_relationship,
+    };
+    setData(filled);
+    localStorage.setItem('registration_form_data', JSON.stringify(filled));
+    setAutofillBanner(p => ({ ...p, dismissed: true }));
+    toast.success('Guardian details pre-filled from your previous registration');
+  };
+
   const handleSubmit = async () => {
+    if (!files.passport_photo) {
+      toast.error('Passport photo is required before submitting');
+      return;
+    }
     setLoading(true);
     try {
       const fd = new FormData();
@@ -197,27 +251,27 @@ export default function RegisterPage() {
     }
   };
 
-  const FileUpload = ({ field, label }) => (
+  const FileUpload = ({ field, label, required }) => (
     <div className="form-field">
-      <label>{label}</label>
+      <label>{label}{required && <span className="req" style={{ color: 'var(--red)', marginLeft: 2 }}>*</span>}</label>
       <label style={{
         display: 'flex', alignItems: 'center', gap: 12,
         padding: '10px 14px',
-        border: '1.5px dashed var(--border)',
+        border: `1.5px dashed ${required && !files[field] ? 'var(--red)' : 'var(--border)'}`,
         borderRadius: 'var(--radius-md)',
         cursor: 'pointer',
         background: 'var(--surface)',
         transition: 'border-color .15s',
       }}
         onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--blue)'}
-        onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
+        onMouseLeave={e => e.currentTarget.style.borderColor = required && !files[field] ? 'var(--red)' : 'var(--border)'}
       >
         <input type="file" accept=".jpg,.jpeg,.png,.pdf" hidden
           onChange={e => setFiles(p => ({ ...p, [field]: e.target.files[0] }))}
         />
         <Upload size={16} color="var(--text-3)" />
-        <span style={{ fontSize: 13, color: files[field] ? 'var(--text-1)' : 'var(--text-3)' }}>
-          {files[field] ? files[field].name : 'Click to upload (JPG, PNG, PDF — max 5MB)'}
+        <span style={{ fontSize: 13, color: files[field] ? 'var(--text-1)' : required ? 'var(--red)' : 'var(--text-3)' }}>
+          {files[field] ? files[field].name : `Click to upload (JPG, PNG, PDF — max 5MB)${required ? ' — Required' : ''}`}
         </span>
         {files[field] && (
           <X size={14} color="var(--text-3)" style={{ marginLeft: 'auto' }}
@@ -506,6 +560,30 @@ export default function RegisterPage() {
 
             {/* STEP 2 — Guardian */}
             {step === 2 && <>
+              {/* Autofill banner */}
+              {autofillLoading && (
+                <div style={{ padding: '10px 14px', background: 'var(--surface)', borderRadius: 'var(--radius-md)', fontSize: 13, color: 'var(--text-3)' }}>
+                  Looking up your previous registration…
+                </div>
+              )}
+              {autofillBanner && !autofillBanner.dismissed && (
+                <div style={{ padding: '14px 16px', background: 'rgba(26,111,165,0.07)', border: '1px solid rgba(26,111,165,0.25)', borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--navy)', marginBottom: 2 }}>Previous registration found</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-2)' }}>
+                      Guardian details from <strong>{autofillBanner.record.guardian_name}</strong>'s earlier registration can be pre-filled.
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                    <button type="button" className="btn btn-primary btn-sm" onClick={() => applyAutofill(autofillBanner.record)}>
+                      Pre-fill Details
+                    </button>
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAutofillBanner(p => ({ ...p, dismissed: true }))}>
+                      Dismiss
+                    </button>
+                  </div>
+                </div>
+              )}
               <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: 14 }}>
                 <Field label="Title">
                   <Select value={data.guardian_title} onChange={e => set('guardian_title', e.target.value)}>
@@ -647,7 +725,7 @@ export default function RegisterPage() {
               <div style={{ borderTop: '1px solid var(--border)', paddingTop: 20, marginTop: 8 }}>
                 <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-2)', marginBottom: 12 }}>Section H: Document Uploads</p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  <FileUpload field="passport_photo" label="Passport Photograph (recent)" />
+                  <FileUpload field="passport_photo" label="Passport Photograph (recent)" required />
                   <FileUpload field="birth_certificate" label="Birth Certificate / Age Declaration" />
                   <FileUpload field="school_result" label="Last School Result" />
                 </div>

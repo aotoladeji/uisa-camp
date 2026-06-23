@@ -34,20 +34,21 @@ function getTimelineStep(status) {
 
 export default function StatusPage() {
   const [form, setForm]     = useState({ email: '', phone: '' });
-  const [result, setResult] = useState(null);
+  const [results, setResults] = useState(null);   // now an array
   const [loading, setLoading] = useState(false);
   const [error, setError]   = useState('');
 
   const handleSearch = async e => {
     e.preventDefault();
     setError('');
-    setResult(null);
+    setResults(null);
     setLoading(true);
     try {
       const { data } = await api.get('/applicants/lookup', {
         params: { email: form.email.trim(), phone: form.phone.trim() }
       });
-      setResult(data);
+      // API now returns an array always
+      setResults(Array.isArray(data) ? data : [data]);
     } catch (err) {
       setError(err.response?.data?.error || 'Application not found. Please check your details.');
     } finally {
@@ -55,6 +56,8 @@ export default function StatusPage() {
     }
   };
 
+  // Use first result for single-child backward compat; all for multi-child display
+  const result  = results?.[0] ?? null;
   const cfg = result ? (STATUS_CONFIG[result.status] || STATUS_CONFIG['Pending']) : null;
   const StatusIcon = cfg?.icon;
   const timelineStep = result ? getTimelineStep(result.status) : 0;
@@ -135,32 +138,30 @@ export default function StatusPage() {
 </html>`;
   };
 
-  const downloadAdmissionLetter = () => {
-    if (!result) return;
-    const html = buildAdmissionLetterHtml(result);
+  const downloadAdmissionLetter = (app) => {
+    if (!app) return;
+    const html = buildAdmissionLetterHtml(app);
     const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `admission-letter-${(result.form_number || 'uisa').replace(/[^a-zA-Z0-9-]/g, '-')}.html`;
+    a.download = `admission-letter-${(app.form_number || 'uisa').replace(/[^a-zA-Z0-9-]/g, '-')}.html`;
     document.body.appendChild(a);
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
   };
 
-  const printAdmissionLetter = () => {
-    if (!result) return;
-    const html = buildAdmissionLetterHtml(result);
+  const printAdmissionLetter = (app) => {
+    if (!app) return;
+    const html = buildAdmissionLetterHtml(app);
     const printWin = window.open('', '_blank', 'noopener,noreferrer,width=980,height=860');
     if (!printWin) return;
     printWin.document.open();
     printWin.document.write(html);
     printWin.document.close();
     printWin.focus();
-    setTimeout(() => {
-      printWin.print();
-    }, 250);
+    setTimeout(() => { printWin.print(); }, 250);
   };
 
   return (
@@ -219,21 +220,37 @@ export default function StatusPage() {
           </form>
         </div>
 
-        {/* Result */}
-        {result && (
-          <div className="card" style={{ overflow: 'hidden' }}>
+        {/* Result — supports multiple children per guardian */}
+        {results && results.length > 1 && (
+          <div style={{ marginBottom: 16, padding: '12px 16px', background: 'rgba(26,111,165,0.07)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(26,111,165,0.2)', fontSize: 13, color: 'var(--blue)', fontWeight: 600 }}>
+            {results.length} applications found for this guardian. Showing all below.
+          </div>
+        )}
+
+        {results && results.map((result, idx) => {
+          const resCfg = STATUS_CONFIG[result.status] || STATUS_CONFIG['Pending'];
+          const ResIcon = resCfg.icon;
+          const resTimelineStep = getTimelineStep(result.status);
+          const resRejected = result.status === 'Rejected';
+          return (
+          <div key={result.id} className="card" style={{ overflow: 'hidden', marginBottom: results.length > 1 ? 20 : 0 }}>
+            {results.length > 1 && (
+              <div style={{ padding: '8px 20px', background: 'var(--surface)', borderBottom: '1px solid var(--border)', fontSize: 12, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '.5px' }}>
+                Child {idx + 1} of {results.length}
+              </div>
+            )}
             {/* Status header */}
-            <div style={{ background: isRejected ? 'var(--red)' : 'var(--navy)', padding: '24px 28px' }}>
+            <div style={{ background: resRejected ? 'var(--red)' : 'var(--navy)', padding: '24px 28px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                 <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <StatusIcon size={24} color="white" />
+                  <ResIcon size={24} color="white" />
                 </div>
                 <div>
                   <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 2 }}>
                     Current Status
                   </div>
                   <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 20, color: 'white' }}>
-                    {cfg.label}
+                    {resCfg.label}
                   </div>
                 </div>
               </div>
@@ -258,32 +275,27 @@ export default function StatusPage() {
               </div>
 
               {/* Timeline */}
-              {!isRejected && (
+              {!resRejected && (
                 <div>
                   <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 16 }}>Progress</p>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
                     {TIMELINE.map((t, i) => {
-                      const done    = i < timelineStep;
-                      const active  = i === timelineStep;
-                      const pending = i > timelineStep;
+                      const done   = i < resTimelineStep;
+                      const active = i === resTimelineStep;
                       return (
                         <div key={t.key} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
                           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                            <div style={{
-                              width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+                            <div style={{ width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
                               background: done ? 'var(--navy)' : active ? 'var(--gold)' : 'var(--border)',
-                              display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            }}>
-                              {done
-                                ? <CheckCircle size={14} color="white" />
-                                : <div style={{ width: 8, height: 8, borderRadius: '50%', background: active ? 'white' : 'var(--text-3)' }} />
-                              }
+                              display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              {done ? <CheckCircle size={14} color="white" />
+                                : <div style={{ width: 8, height: 8, borderRadius: '50%', background: active ? 'white' : 'var(--text-3)' }} />}
                             </div>
                             {i < TIMELINE.length - 1 && (
                               <div style={{ width: 2, height: 24, background: done ? 'var(--navy)' : 'var(--border)', margin: '2px 0' }} />
                             )}
                           </div>
-                          <div style={{ paddingTop: 5, paddingBottom: i < TIMELINE.length - 1 ? 0 : 0 }}>
+                          <div style={{ paddingTop: 5 }}>
                             <span style={{ fontSize: 13, fontWeight: active ? 700 : 500, color: done || active ? 'var(--text-1)' : 'var(--text-3)' }}>
                               {t.label}
                               {active && <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 700, color: 'var(--gold)', background: 'rgba(232,160,0,0.12)', padding: '2px 8px', borderRadius: 20 }}>Current</span>}
@@ -296,7 +308,7 @@ export default function StatusPage() {
                 </div>
               )}
 
-              {/* CTA based on status */}
+              {/* CTAs */}
               {result.status === 'Pending' && (
                 <div style={{ marginTop: 20, padding: '14px 16px', background: 'rgba(232,160,0,0.08)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(232,160,0,0.25)' }}>
                   <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--amber)', marginBottom: 8 }}>Action Required: Upload Payment</p>
@@ -311,19 +323,19 @@ export default function StatusPage() {
 
               {result.status === 'Admitted' && (
                 <div style={{ marginTop: 20, padding: '16px', background: 'var(--green-bg)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(22,163,74,0.3)' }}>
-                  <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--green)', marginBottom: 4 }}>🎉 Congratulations! You have been admitted.</p>
+                  <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--green)', marginBottom: 4 }}>🎉 Congratulations! {result.first_name} has been admitted.</p>
                   <p style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 12 }}>
-                    Please arrive at International School, University of Ibadan on <strong>August 3, 2026</strong> between 7–9AM with your admission letter and all documents.
+                    Please arrive at International School, University of Ibadan on <strong>August 3, 2026</strong> between 7–9AM with the admission letter and all documents.
                   </p>
                   <div style={{ background: '#ffffff', border: '1px solid rgba(22,163,74,0.28)', borderRadius: 'var(--radius-md)', padding: '12px 14px' }}>
                     <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--green)', marginBottom: 10 }}>
-                      Click below to get your admission letter for download or printing.
+                      Click below to get the admission letter.
                     </p>
                     <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                      <button type="button" className="btn btn-primary btn-sm" onClick={downloadAdmissionLetter}>
+                      <button type="button" className="btn btn-primary btn-sm" onClick={() => downloadAdmissionLetter(result)}>
                         <FileText size={14} /> Download Admission Letter
                       </button>
-                      <button type="button" className="btn btn-outline btn-sm" onClick={printAdmissionLetter}>
+                      <button type="button" className="btn btn-outline btn-sm" onClick={() => printAdmissionLetter(result)}>
                         <Printer size={14} /> Print Admission Letter
                       </button>
                     </div>
@@ -332,10 +344,16 @@ export default function StatusPage() {
               )}
             </div>
           </div>
-        )}
+          );
+        })}
 
         <div style={{ textAlign: 'center', marginTop: 24, fontSize: 13, color: 'var(--text-3)' }}>
           Need help? Call <strong>08036870535</strong> or email <a href="mailto:uisportsacademy@gmail.com" style={{ color: 'var(--blue)' }}>uisportsacademy@gmail.com</a>
+          <div style={{ marginTop: 10 }}>
+            <Link to="/update-docs" style={{ color: 'var(--blue)', fontWeight: 600 }}>
+              Re-upload passport photo or documents →
+            </Link>
+          </div>
         </div>
       </div>
     </div>
