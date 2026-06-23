@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "npm install --prefix client && npm install --prefix server && cd client && npx react-scripts build",
+  "buildCommand": "npm install --prefix client && npm install --prefix server && npm run build --prefix client",
   "outputDirectory": "client/build",
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/index" },
