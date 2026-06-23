@@ -67,6 +67,7 @@ export default function RegisterPage() {
   const [locationLib, setLocationLib] = useState(null);
   const [autofillBanner, setAutofillBanner] = useState(null); // { record, dismissed }
   const [autofillLoading, setAutofillLoading] = useState(false);
+  const autofillAttempted = React.useRef(false); // prevents re-running after banner is shown
 
   useEffect(() => {
     let mounted = true;
@@ -177,7 +178,7 @@ export default function RegisterPage() {
     const name  = data.guardian_name?.trim();
     const phone = data.guardian_phone?.trim();
     if (!name || phone.length < 7) return;
-    if (autofillBanner) return; // already found or dismissed
+    if (autofillAttempted.current) return; // already found or dismissed
 
     const timer = setTimeout(async () => {
       setAutofillLoading(true);
@@ -185,6 +186,7 @@ export default function RegisterPage() {
         const { data: record } = await api.get('/applicants/lookup-guardian', {
           params: { name, phone }
         });
+        autofillAttempted.current = true;
         setAutofillBanner({ record, dismissed: false });
       } catch {
         // no match — silent
@@ -194,7 +196,6 @@ export default function RegisterPage() {
     }, 800); // debounce
 
     return () => clearTimeout(timer);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, data.guardian_name, data.guardian_phone]);
 
   const applyAutofill = (record) => {
@@ -215,6 +216,7 @@ export default function RegisterPage() {
     };
     setData(filled);
     localStorage.setItem('registration_form_data', JSON.stringify(filled));
+    autofillAttempted.current = true;
     setAutofillBanner(p => ({ ...p, dismissed: true }));
     toast.success('Guardian details pre-filled from your previous registration');
   };
@@ -578,7 +580,7 @@ export default function RegisterPage() {
                     <button type="button" className="btn btn-primary btn-sm" onClick={() => applyAutofill(autofillBanner.record)}>
                       Pre-fill Details
                     </button>
-                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAutofillBanner(p => ({ ...p, dismissed: true }))}>
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => { autofillAttempted.current = true; setAutofillBanner(p => ({ ...p, dismissed: true })); }}>
                       Dismiss
                     </button>
                   </div>
