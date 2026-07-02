@@ -721,10 +721,10 @@ router.patch('/:id',
                           ocr_extracted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
                          WHERE id = ?`,
                         [
-                          p.transaction_ref || extracted.reference || null,
-                          p.receipt_transaction_ref || extracted.reference || null,
-                          p.receipt_amount || extracted.amount || null,
-                          p.payment_date || extracted.date || null,
+                          p.transaction_ref || extracted.transaction_ref || null,
+                          p.receipt_transaction_ref || extracted.transaction_ref || null,
+                          p.receipt_amount || extracted.amount_paid || null,
+                          p.payment_date || extracted.payment_date || null,
                           p.id
                         ]
                       );
@@ -846,7 +846,10 @@ router.post('/:id/send-email', authenticate, requireRole('admin', 'super_admin')
       guardian_name: appl.guardian_name,
       sport: appl.sport_selection,
       category: appl.age_category,
-      amount: appl.amount_paid || 0
+      amount: appl.amount_paid || 0,
+      group: appl.group_assigned,
+      coach: appl.coach_assigned,
+      room: appl.room_number
     }, appl.id, req.admin.id);
 
     res.json({ success: true, message: `Email (${type}) sent to ${appl.guardian_email}` });

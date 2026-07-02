@@ -34,6 +34,7 @@ const baseTemplate = (title, content) => `
     .detail-value { display: table-cell; font-weight: 700; color: #2d3748; text-align: right; }
     .badge { display: inline-block; padding: 4px 12px; border-radius: 9999px; font-size: 12px; font-weight: 700; text-transform: uppercase; }
     .badge-blue { background-color: #ebf8ff; color: #3182ce; }
+    .badge-green { background-color: #f0fff4; color: #38a169; }
     .footer { padding: 20px; text-align: center; color: #a0aec0; font-size: 12px; background-color: #f7fafc; }
     .footer p { margin: 5px 0; }
   </style>
@@ -101,11 +102,43 @@ const templates = {
     subject: `Official Admission Offer – ${data.full_name} | UI Sports Academy`,
     html: baseTemplate('Congratulations! Admission Offered 🏆', `
       <p>Dear <strong>${data.guardian_name}</strong>,</p>
-      <p>We are delighted to inform you that <strong>${data.full_name}</strong> has been offered admission to the 2026 Summer Camp.</p>
+      <p>We are delighted to inform you that <strong>${data.full_name}</strong> has been offered admission into the 2026 University of Ibadan Sports Academy Summer Camp.</p>
+      
+      <p>Following the successful review of the application and verification of all required documentation, the applicant has been selected to participate in this year's camp programme. This admission reflects our confidence in the applicant's potential and our commitment to supporting the development of young athletes in both sports performance and character.</p>
+
       <div class="detail-box">
         <div class="detail-row"><span class="detail-label">Form Number</span><span class="detail-value">${data.form_number}</span></div>
+        <div class="detail-row"><span class="detail-label">Participant</span><span class="detail-value">${data.full_name}</span></div>
         <div class="detail-row"><span class="detail-label">Sport</span><span class="detail-value">${data.sport}</span></div>
+        <div class="detail-row"><span class="detail-label">Camp Period</span><span class="detail-value">August 3 – Aug 28, 2026</span></div>
+        <div class="detail-row"><span class="detail-label">Venue</span><span class="detail-value">International School, Univ. of Ibadan</span></div>
+        <div class="detail-row"><span class="detail-label">Training Group</span><span class="detail-value">${data.group || 'TBA'}</span></div>
+        <div class="detail-row"><span class="detail-label">Assigned Coach</span><span class="detail-value">${data.coach || 'TBA'}</span></div>
+        <div class="detail-row"><span class="detail-label">Accommodation</span><span class="detail-value">${data.room || 'TBA'}</span></div>
+        <div class="detail-row"><span class="detail-label">Admission Status</span><span class="detail-value"><span class="badge badge-green">Admitted</span></span></div>
       </div>
+
+      <h2>Arrival Information</h2>
+      <p>Participants are expected to arrive on <strong>Monday, August 3, 2026</strong> between 7:00 AM and 9:00 AM for registration, orientation, and camp allocation.</p>
+
+      <div class="detail-box">
+        <p><strong>Please come along with:</strong></p>
+        <ul style="margin: 0; padding-left: 20px;">
+          <li>Printed admission letter</li>
+          <li>Proof of payment</li>
+          <li>Medical information (if applicable)</li>
+          <li>Any sport-specific equipment required</li>
+        </ul>
+      </div>
+
+      <h2>Important Notice</h2>
+      <p>This admission is valid for the 2026 Summer Camp session only. Participants are expected to comply with all camp rules, safety regulations, and the code of conduct throughout the programme.</p>
+
+      <p>We look forward to welcoming <strong>${data.full_name}</strong> to an exciting month of learning, competition, teamwork, discipline, and personal development.</p>
+
+      <p>Congratulations once again on your successful admission to the UI Sports Academy Summer Camp 2026.</p>
+      
+      <p style="font-style: italic; color: #0A3D62; font-weight: bold;">Developing Champions in Sports and Character.</p>
     `)
   }),
 };
