@@ -63,23 +63,49 @@ if (process.env.DATABASE_URL) {
 
   const libsqlPool = {
     async query(sql, params = []) {
-      const res = await client.execute({ sql, args: params });
-      const sqlText = sql.replace(/\/\*[\s\S]*?\*\/|--.*$/gm, '').trim();
-      const upper = sqlText.toUpperCase();
-      
-      if (upper.startsWith('SELECT') || upper.startsWith('PRAGMA') || upper.startsWith('WITH') || (res.rows && res.rows.length > 0)) {
-        // Normalize column names to lowercase to prevent issues with LibSQL/Turso case-sensitivity
-        const normalizedRows = (res.rows || []).map(row => {
-          if (typeof row !== 'object' || row === null) return row;
-          const normalized = {};
-          for (const key of Object.keys(row)) {
-            normalized[key.toLowerCase()] = row[key];
+      try {
+        const res = await client.execute({ sql, args: params });
+        const sqlText = sql.replace(/\/\*[\s\S]*?\*\/|--.*$/gm, '').trim();
+        const upper = sqlText.toUpperCase();
+        
+        // If query returns rows (SELECT, PRAGMA check, etc.)
+        if (Array.isArray(res.rows)) {
+          // Normalize column names to lowercase to prevent issues with LibSQL/Turso case-sensitivity
+          const normalizedRows = res.rows.map(row => {
+            if (typeof row !== 'object' || row === null) return row;
+            // Handle both object-style (if rowMode: 'object' used) and array-style rows
+            const normalized = {};
+            if (Array.isArray(row)) {
+              // If rows are arrays (default), they usually don't have column names easily accessible
+              // but ResultSet.columns has them!
+              res.columns.forEach((col, idx) => {
+                normalized[col.toLowerCase()] = row[idx];
+              });
+            } else {
+              // If rows are objects
+              for (const key of Object.keys(row)) {
+                normalized[key.toLowerCase()] = row[key];
+              }
+            }
+            return normalized;
+          });
+
+          // Some queries like SELECT might be false-positives if we check res.rowsAffected
+          // But for SELECT, PRAGMA, WITH, we always want the rows array.
+          if (upper.startsWith('SELECT') || upper.startsWith('PRAGMA') || upper.startsWith('WITH') || res.columns.length > 0) {
+            return [normalizedRows];
           }
-          return normalized;
-        });
-        return [normalizedRows];
+        }
+        
+        // DML (INSERT/UPDATE/DELETE) result
+        return [{ 
+          insertId: Number(res.lastInsertRowid ?? 0), 
+          affectedRows: res.rowsAffected ?? 0 
+        }];
+      } catch (err) {
+        console.error('LibSQL Query Error:', err.message, '| SQL:', sql.substring(0, 100));
+        throw err;
       }
-      return [{ insertId: Number(res.lastInsertRowid ?? 0), affectedRows: res.rowsAffected ?? 0 }];
     },
     async execute(sql, params = []) { return this.query(sql, params); },
     async getConnection() {

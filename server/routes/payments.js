@@ -156,7 +156,7 @@ router.post('/submit',
             [applicant_id]
           );
           if (paymentRows.length) {
-            const payment = paymentRows[0];
+            const p = paymentRows[0];
             await pool.query(
               `UPDATE payments
                SET transaction_ref = ?,
@@ -169,20 +169,17 @@ router.post('/submit',
                    updated_at = CURRENT_TIMESTAMP
                WHERE id = ?`,
               [
-                payment.transaction_ref || extracted.transaction_ref || null,
-                payment.receipt_transaction_ref || extracted.transaction_ref || null,
-                payment.receipt_amount || extracted.amount_paid || null,
-                payment.payment_date || extracted.payment_date || null,
-                payment.bank_name || extracted.bank_name || 'Access Bank',
-                payment.account_number || extracted.account_number || null,
-                payment.id,
+                p.transaction_ref || extracted.transaction_ref || null,
+                p.receipt_transaction_ref || extracted.transaction_ref || null,
+                p.receipt_amount || extracted.amount_paid || null,
+                p.payment_date || extracted.payment_date || null,
+                p.bank_name || extracted.bank_name || 'Access Bank',
+                p.account_number || extracted.account_number || null,
+                p.id,
               ]
             );
           }
         } catch (bgErr) {
-          console.warn('Background payment post-processing failed:', bgErr.message);
-        }
-      });
           console.warn('Background payment post-processing failed:', bgErr.message);
         }
       });

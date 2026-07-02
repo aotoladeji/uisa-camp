@@ -251,10 +251,6 @@ async function extractPaymentDetails(imageInput) {
     console.log('Final Extracted OCR details:', extracted);
     return extracted;
   } catch (error) {
-    console.error('OCR Processing Error:', error.message);
-    return emptyExtracted();
-  }
-}
     console.error('OCR extraction error:', error);
     return {
       ...emptyExtracted(),

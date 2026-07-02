@@ -527,29 +527,12 @@ router.get('/stats/summary', authenticate, async (req, res) => {
       FROM applicants`
     );
 
-    // Normalize keys to lowercase to ensure frontend compatibility
-    const countsResult = countsRows && countsRows.length > 0 ? countsRows[0] : {};
-    const normalizedCounts = {};
-    Object.keys(countsResult).forEach(key => {
-      normalizedCounts[key.toLowerCase()] = countsResult[key];
-    });
-    
-    const [sportBreakdownRaw] = await pool.query(`SELECT sport_selection, COUNT(*) AS count FROM applicants GROUP BY sport_selection`);
-    const sportBreakdown = (sportBreakdownRaw || []).map(row => {
-      const normalized = {};
-      Object.keys(row).forEach(key => normalized[key.toLowerCase()] = row[key]);
-      return normalized;
-    });
-
-    const [categoryBreakdownRaw] = await pool.query(`SELECT age_category, COUNT(*) AS count
+    const counts = countsRows[0] || {};
+    const [sportBreakdown] = await pool.query(`SELECT sport_selection, COUNT(*) AS count FROM applicants GROUP BY sport_selection`);
+    const [categoryBreakdown] = await pool.query(`SELECT age_category, COUNT(*) AS count
       FROM applicants
       WHERE age_category IS NOT NULL AND age_category != ''
       GROUP BY age_category`);
-    const categoryBreakdown = (categoryBreakdownRaw || []).map(row => {
-      const normalized = {};
-      Object.keys(row).forEach(key => normalized[key.toLowerCase()] = row[key]);
-      return normalized;
-    });
 
     const [revRows] = await pool.query(`SELECT 
         SUM(amount_paid) AS total_revenue,
@@ -557,20 +540,15 @@ router.get('/stats/summary', authenticate, async (req, res) => {
       FROM payments 
       WHERE verification_status = 'Verified' OR verification_status = 'verified'`);
     
-    // Normalize revenue keys
-    const revResult = revRows && revRows.length > 0 ? revRows[0] : {};
-    const normalizedRevenue = {};
-    Object.keys(revResult).forEach(key => {
-      normalizedRevenue[key.toLowerCase()] = revResult[key];
-    });
+    const revenue = revRows[0] || {};
 
     res.json({ 
-      counts: normalizedCounts, 
+      counts: counts, 
       sportBreakdown: sportBreakdown || [], 
       categoryBreakdown: categoryBreakdown || [], 
       revenue: {
-        total_revenue: normalizedRevenue.total_revenue || 0,
-        total_payments: normalizedRevenue.total_payments || 0
+        total_revenue: revenue.total_revenue || 0,
+        total_payments: revenue.total_payments || 0
       }
     });
   } catch (err) {
