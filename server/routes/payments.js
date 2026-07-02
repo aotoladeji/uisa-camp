@@ -256,10 +256,20 @@ router.patch('/:id/verify', authenticate, requireRole('admin','verifier','super_
   if (action === 'verify') {
     await pool.query(
       `UPDATE applicants
-       SET status = CASE
-         WHEN status = 'Admitted' THEN 'Admitted'
-         ELSE 'Payment Verified'
-       END
+       SET is_payment_verified = 1,
+           status = CASE
+             WHEN status = 'Admitted' THEN 'Admitted'
+             ELSE 'Payment Verified'
+           END
+       WHERE id=?`,
+      [pmt.applicant_id]
+    );
+  } else {
+    // If rejected, remove verification flag
+    await pool.query(
+      `UPDATE applicants
+       SET is_payment_verified = 0,
+           status = 'Rejected'
        WHERE id=?`,
       [pmt.applicant_id]
     );

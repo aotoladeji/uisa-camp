@@ -97,7 +97,7 @@ const parseIds = (value) => {
     .filter(Number.isInteger);
 };
 
-  const getPricing = async () => getPricingConfig(pool);
+const getPricing = async () => getPricingConfig(pool);
 
 // ─── POST /api/applicants  (public: submit registration) ─────────────────────
 router.post('/',
@@ -122,7 +122,8 @@ router.post('/',
       const category = age <= 17 ? 'Junior (6-17)' : 'Elite (18-23)';
       const autoAcceptMode = await getAutoAcceptMode();
       const autoAccepted = shouldAutoAcceptApplication(d, category, autoAcceptMode);
-      const initialStatus = autoAccepted ? 'Admitted' : 'Pending';
+      // We start all applicants at 'Pending' so Admin can review and trigger emails manually.
+      const initialStatus = 'Pending';
 
       const [result] = await pool.query(
         `INSERT INTO applicants (
@@ -280,6 +281,7 @@ router.get('/lookup', async (req, res) => {
   const [rows] = await pool.query(`
     SELECT a.id, a.form_number, a.surname, a.first_name, a.age_category,
            a.sport_selection, a.status, a.guardian_email, a.guardian_phone,
+           a.is_payment_verified, a.is_medical_cleared, a.is_admitted,
            p.verification_status AS payment_status, p.amount_paid,
            a.created_at
     FROM applicants a
@@ -511,56 +513,58 @@ router.post('/bulk-delete', authenticate, requireRole('admin','super_admin'), as
 // IMPORTANT: must be defined BEFORE /:id route or Express will match 'stats' as an id
 router.get('/stats/summary', authenticate, async (req, res) => {
   try {
-    const [counts] = await pool.query(`
+    const [countsRows] = await pool.query(`
       SELECT
         COUNT(*) AS total,
-        COUNT(CASE WHEN UPPER(TRIM(status))='PENDING' THEN 1 END) AS pending,
-        COUNT(CASE WHEN UPPER(TRIM(status))='PAYMENT SUBMITTED' THEN 1 END) AS payment_submitted,
-        COUNT(CASE WHEN is_payment_verified = 1 THEN 1 END) AS payment_verified,
-        COUNT(CASE WHEN is_medical_cleared = 1 THEN 1 END) AS medical_cleared,
-        COUNT(CASE WHEN is_admitted = 1 THEN 1 END) AS admitted,
-        COUNT(CASE WHEN UPPER(TRIM(status))='REJECTED' THEN 1 END) AS rejected
+        SUM(CASE WHEN LOWER(TRIM(status)) = 'pending' THEN 1 ELSE 0 END) AS pending,
+        SUM(CASE WHEN LOWER(TRIM(status)) = 'payment submitted' THEN 1 ELSE 0 END) AS payment_submitted,
+        SUM(CASE WHEN is_payment_verified = 1 THEN 1 ELSE 0 END) AS payment_verified,
+        SUM(CASE WHEN is_medical_cleared = 1 THEN 1 ELSE 0 END) AS medical_cleared,
+        SUM(CASE WHEN is_admitted = 1 THEN 1 ELSE 0 END) AS admitted,
+        SUM(CASE WHEN LOWER(TRIM(status)) = 'rejected' THEN 1 ELSE 0 END) AS rejected
       FROM applicants`
     );
 
     // Normalize keys to lowercase to ensure frontend compatibility
-    const countsResult = counts[0];
+    const countsResult = countsRows && countsRows.length > 0 ? countsRows[0] : {};
     const normalizedCounts = {};
-    for (const key in countsResult) {
+    Object.keys(countsResult).forEach(key => {
       normalizedCounts[key.toLowerCase()] = countsResult[key];
-    }
+    });
     
-    const [sportRows] = await pool.query(`
+    const [sportBreakdown] = await pool.query(`
       SELECT sport_selection, COUNT(*) AS count FROM applicants GROUP BY sport_selection`
     );
-    const [catRows] = await pool.query(`
+    const [categoryBreakdown] = await pool.query(`
       SELECT age_category, COUNT(*) AS count
       FROM applicants
       WHERE age_category IS NOT NULL AND age_category != ''
       GROUP BY age_category`
     );
     const [revRows] = await pool.query(`
-      SELECT COALESCE(SUM(amount_paid),0) AS total_revenue,
-             COUNT(*) AS total_payments
-      FROM payments WHERE UPPER(TRIM(verification_status)) = 'VERIFIED'`
+      SELECT 
+        SUM(amount_paid) AS total_revenue,
+        COUNT(*) AS total_payments
+      FROM payments 
+      WHERE verification_status = 'Verified' OR verification_status = 'verified'`
     );
     
     // Normalize revenue keys
-    const revResult = revRows[0];
-    const normalizedRevenue = {};
-    for (const key in revResult) {
-      normalizedRevenue[key.toLowerCase()] = revResult[key];
-    }
+    const revResult = revRows && revRows.length > 0 ? revRows[0] : {};
+    const normalizedRevenue = {
+      total_revenue: revResult.total_revenue || 0,
+      total_payments: revResult.total_payments || 0
+    };
 
     res.json({ 
       counts: normalizedCounts, 
-      sportBreakdown: sportRows, 
-      categoryBreakdown: catRows, 
+      sportBreakdown: sportBreakdown || [], 
+      categoryBreakdown: categoryBreakdown || [], 
       revenue: normalizedRevenue 
     });
   } catch (err) {
-    console.error('Stats error:', err);
-    res.status(500).json({ error: 'Failed to retrieve dashboard stats' });
+    console.error('Stats error DETAILED:', err);
+    res.status(500).json({ error: 'Failed to retrieve dashboard stats', details: err.message });
   }
 });
 
@@ -589,7 +593,8 @@ router.patch('/:id', authenticate, requireRole('admin', 'super_admin'), async (r
     'sport_selection', 'experience_level', 'tshirt_size',
     'guardian_name', 'guardian_phone', 'guardian_email', 'guardian_whatsapp',
     'blood_group', 'genotype', 'allergies', 'current_medications',
-    'group_assigned', 'room_number', 'coach_assigned'
+    'group_assigned', 'room_number', 'coach_assigned',
+    'is_payment_verified', 'is_medical_cleared', 'is_admitted', 'status'
   ];
 
   const updates = [];
