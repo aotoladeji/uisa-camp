@@ -3,11 +3,19 @@ const pool    = require('../db/pool');
 const upload  = require('../middleware/upload');
 const { authenticate, requireRole } = require('../middleware/auth');
 const { sendEmail } = require('../middleware/email');
-const { extractPaymentDetails } = require('../middleware/ocr');
+const { extractPaymentDetails, hasUsefulExtraction } = require('../middleware/ocr');
 const { getPricingConfig } = require('../utils/pricing');
 const cloudinary = require('../utils/cloudinary');
 
 const router = express.Router();
+
+const normalizeUploadPath = (filePath) => {
+  if (!filePath) return null;
+  const s = String(filePath);
+  if (s.startsWith('http')) return s;
+  if (s.startsWith('memory') || s.includes('Screenshot')) return null;
+  return s.replace(/\\/g, '/').replace(/^\.?\//, '');
+};
 
 // ─── POST /api/payments/submit  (public: applicant uploads receipt) ────────────
 router.post('/submit',
@@ -143,8 +151,9 @@ router.post('/submit',
             }
           }
 
-          // extracted OCR details - use buffer if available
-          const extracted = await extractPaymentDetails(req.file.buffer || req.file.path);
+          // extracted OCR details - prioritize buffer to avoid "memory:" path strings
+          const ocrInput = (req.file.buffer && req.file.buffer.length > 0) ? req.file.buffer : req.file.path;
+          const extracted = await extractPaymentDetails(ocrInput);
 
           const [paymentRows] = await pool.query(
             `SELECT id, transaction_ref, receipt_transaction_ref, amount_paid, receipt_amount,
@@ -155,7 +164,7 @@ router.post('/submit',
              LIMIT 1`,
             [applicant_id]
           );
-          if (paymentRows.length) {
+          if (paymentRows.length && extracted && hasUsefulExtraction(extracted)) {
             const p = paymentRows[0];
             await pool.query(
               `UPDATE payments
@@ -169,10 +178,10 @@ router.post('/submit',
                    updated_at = CURRENT_TIMESTAMP
                WHERE id = ?`,
               [
-                p.transaction_ref || extracted.transaction_ref || null,
-                p.receipt_transaction_ref || extracted.transaction_ref || null,
-                p.receipt_amount || extracted.amount_paid || null,
-                p.payment_date || extracted.payment_date || null,
+                p.transaction_ref || extracted.reference || null,
+                p.receipt_transaction_ref || extracted.reference || null,
+                p.receipt_amount || extracted.amount || null,
+                p.payment_date || extracted.date || null,
                 p.bank_name || extracted.bank_name || 'Access Bank',
                 p.account_number || extracted.account_number || null,
                 p.id,
@@ -220,7 +229,8 @@ router.get('/', authenticate, async (req, res) => {
     params
   );
 
-  res.json({ data: rows, total, page: parseInt(page), limit: parseInt(limit) });
+  const data = rows.map(r => ({ ...r, receipt_path: normalizeUploadPath(r.receipt_path) }));
+  res.json({ data, total, page: parseInt(page), limit: parseInt(limit) });
 });
 
 // ─── GET /api/payments/:id  (admin) ───────────────────────────────────────────
@@ -232,7 +242,10 @@ router.get('/:id', authenticate, async (req, res) => {
     WHERE p.id=?`, [req.params.id]
   );
   if (!rows.length) return res.status(404).json({ error: 'Not found' });
-  res.json(rows[0]);
+  
+  const row = rows[0];
+  row.receipt_path = normalizeUploadPath(row.receipt_path);
+  res.json(row);
 });
 
 // ─── PATCH /api/payments/:id/verify  (admin: verify or reject payment) ────────

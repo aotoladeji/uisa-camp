@@ -43,41 +43,59 @@ function sanitizeReference(ref) {
 
 function extractAmount(text) {
   const candidates = [];
-  const amountRegex = /(?:amount|amt|total|paid|debit|transfer)\s*(?:is|:|-)?\s*(?:NGN|N|#|₦)?\s*([\d][\d,\s]{2,}(?:\.\d{1,2})?)/gi;
-  const currencyRegex = /(?:NGN|N|#|₦)\s*([\d][\d,\s]{2,}(?:\.\d{1,2})?)/gi;
-  const generalRegex = /\b([\d]{1,3}(?:,[\d]{3})+(?:\.\d{1,2})?|[\d]{4,}(?:\.\d{1,2})?)\b/g;
+  // More inclusive regex for amounts, looking for digits after currency or keywords
+  // Handles formats like "Amount: 230,000", "N230000", "NGN 230,000.00"
+  const amountRegex = /(?:amount|amt|total|paid|debit|transfer|price|sum|value)\s*(?:is|:|-)?\s*(?:NGN|N|#|₦|NG)?\s*([\d]{1,3}(?:,[\d]{3})*(?:\.\d{1,2})?|[\d]{3,}(?:\.\d{1,2})?)/gi;
+  const currencyPrefixRegex = /(?:NGN|N|#|₦|NG)\s*([\d]{1,3}(?:,[\d]{3})*(?:\.\d{1,2})?|[\d]{3,}(?:\.\d{1,2})?)/gi;
+  // Look for any free-standing large number that looks like a fee
+  const generalLargeNumberRegex = /\b([\d]{1,3}(?:,[\d]{3})+(?:\.\d{1,2})?|[\d]{5,}(?:\.\d{1,2})?)\b/g;
 
-  const pushMatches = (regex) => {
-    regex.lastIndex = 0;
-    let match;
-    while ((match = regex.exec(text)) !== null) {
-      const raw = (match[1] || '').replace(/\s+/g, '');
-      const parsed = Number.parseFloat(raw.replace(/,/g, ''));
-      if (Number.isFinite(parsed) && parsed >= 1000 && parsed <= 5000000) {
-        candidates.push(parsed);
-      }
+  const extractFromMatch = (match) => {
+    if (!match || !match[1]) return;
+    const raw = match[1].replace(/,/g, '').trim();
+    const parsed = Number.parseFloat(raw);
+    if (Number.isFinite(parsed) && parsed >= 500 && parsed <= 10000000) {
+      candidates.push(parsed);
     }
   };
 
-  pushMatches(amountRegex);
-  pushMatches(currencyRegex);
-  pushMatches(generalRegex);
+  let m;
+  while ((m = amountRegex.exec(text)) !== null) extractFromMatch(m);
+  amountRegex.lastIndex = 0;
+
+  while ((m = currencyPrefixRegex.exec(text)) !== null) extractFromMatch(m);
+  currencyPrefixRegex.lastIndex = 0;
+
+  while ((m = generalLargeNumberRegex.exec(text)) !== null) {
+     const raw = m[1].replace(/,/g, '').trim();
+     const parsed = Number.parseFloat(raw);
+     if (Number.isFinite(parsed) && parsed >= 5000 && parsed <= 1000000) {
+       candidates.push(parsed);
+     }
+  }
+  generalLargeNumberRegex.lastIndex = 0;
 
   if (!candidates.length) return null;
-  // Pick the first sensible camp-payment-like value, otherwise highest plausible value.
-  const priority = candidates.find(v => v >= 100000 && v <= 500000);
-  return priority || Math.max(...candidates);
+  // Priority: 1. Values exactly matching camp fees, 2. Values in expected range, 3. Highest candidate
+  const feeMatches = candidates.filter(v => v === 230000 || v === 180000 || v === 150000 || v === 250000);
+  if (feeMatches.length) return feeMatches[0];
+  
+  const sensibleRange = candidates.filter(v => v >= 100000 && v <= 500000);
+  if (sensibleRange.length) return Math.max(...sensibleRange);
+
+  return Math.max(...candidates);
 }
 
 function extractFromText(text) {
   const extracted = emptyExtracted();
   const normalizedText = normalizeOcrText(text);
 
-  // Extract transaction reference/ID (various patterns)
+  // Extract transaction reference/ID (more patterns for Nigerian banks)
   const refPatterns = [
-    /(?:transaction(?:\s*(?:id|ref(?:erence)?))?|trans|trx|ref(?:erence)?|session(?:\s*id)?|rrn|stan|retrieval\s*ref(?:erence)?)\s*(?:no|number|#|:|-)?\s*([A-Z0-9/_-]{6,40})/i,
-    /\b([A-Z]{2,}[A-Z0-9]{6,})\b/,
-    /\b([0-9]{10,20})\b/,
+    /(?:transaction(?:\s*(?:id|ref(?:erence)?))?|trans|trx|ref(?:erence)?|session(?:\s*id)?|rrn|stan|retrieval\s*ref(?:erence)?|trace|trace\s*id|payment\s*ref)\s*(?:no|number|#|:|-|is)?\s*([A-Z0-9/_-]{6,40})/i,
+    /(?:ref|session)\s*:\s*([A-Z0-9]{10,40})/i,
+    /\b([A-Z]{2,}[0-9]{8,})\b/,
+    /\b([0-9]{10,25})\b/, // Long numeric strings are often RRNs or Session IDs
   ];
   for (const pattern of refPatterns) {
     const match = normalizedText.match(pattern);
@@ -90,14 +108,15 @@ function extractFromText(text) {
     }
   }
 
-  // Extract amount (store OCR-detected amount even if different from selected amount).
+  // Extract amount
   extracted.amount_paid = extractAmount(normalizedText);
 
-  // Extract date (various formats)
+  // Extract date (various formats including full month names)
   const datePatterns = [
     /(?:date|on)[\s:]*(\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4})/i,
-    /(\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4})/i,
+    /(\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{2,4})/i,
     /(\d{4}-\d{2}-\d{2})/,
+    /(?:time)[\s:]*(\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4})/i,
   ];
   for (const pattern of datePatterns) {
     const match = normalizedText.match(pattern);
@@ -107,27 +126,32 @@ function extractFromText(text) {
     }
   }
 
-  // Extract account number
-  const accountPatterns = [
-    /(?:account|acc|a\/c)[\s:]*(\d{10})/i,
-    /\b(1805832892)\b/,
-    /\b(\d{10})\b/,
-  ];
-  for (const pattern of accountPatterns) {
-    const match = normalizedText.match(pattern);
-    if (match) {
-      extracted.account_number = match[1].trim();
-      break;
+  // Account Number (UISA targeted)
+  if (normalizedText.includes('1805832892')) {
+    extracted.account_number = '1805832892';
+  } else {
+    const accountPatterns = [
+      /(?:account|acc|a\/c|acct)[\s:]*(\d{10})/i,
+      /\b(\d{10})\b/,
+    ];
+    for (const pattern of accountPatterns) {
+      const match = normalizedText.match(pattern);
+      if (match) {
+        extracted.account_number = match[1].trim();
+        break;
+      }
     }
   }
 
-  const bankMatch = normalizedText.match(/(?:bank|paid\s+to\s+bank)[\s:]*([A-Za-z][A-Za-z\s.&-]{2,40})/i)
-    || normalizedText.match(/\b(Access\s+Bank|GTBank|First\s+Bank|UBA|Zenith\s+Bank|Fidelity\s+Bank|FCMB|Sterling\s+Bank|Union\s+Bank|Wema\s+Bank|Opay|Palmpay)\b/i);
+  // Bank name
+  const bankMatch = normalizedText.match(/(?:bank|paid\s+to|sender\s+bank|bank\s+name)[\s:]*([A-Za-z][A-Za-z\s.&-]{2,40})/i)
+    || normalizedText.match(/\b(Access\s+Bank|GTBank|GTB|First\s+Bank|UBA|Zenith\s+Bank|Fidelity\s+Bank|FCMB|Sterling\s+Bank|Union\s+Bank|Wema\s+Bank|Opay|Palmpay|Kuda|Moniepoint|Stanbic|Heritage|Polaris)\b/i);
   if (bankMatch) {
     extracted.bank_name = bankMatch[1].trim().replace(/\s{2,}/g, ' ');
   }
 
-  const accountNameMatch = normalizedText.match(/(?:account\s*name|acct\s*name|beneficiary|recipient|payee)[\s:]*([A-Za-z][A-Za-z\s.'-]{3,80})/i);
+  // Account Name
+  const accountNameMatch = normalizedText.match(/(?:account\s*name|acct\s*name|beneficiary|recipient|payee|receiver|sender)[\s:]*([A-Za-z][A-Za-z\s.'-]{3,80})/i);
   if (accountNameMatch) {
     extracted.account_name = accountNameMatch[1].trim().replace(/\s{2,}/g, ' ');
   }
@@ -195,8 +219,10 @@ async function extractPaymentDetails(imageInput) {
 
   // If it's a string, it MUST be a valid existing file path
   if (typeof imageInput === 'string') {
+    // If it's a "memory:" pseudo-path or doesn't exist, we can't use it as a path.
+    // However, if we have a buffer, we should use that instead.
     if (imageInput.startsWith('memory') || !fs.existsSync(imageInput)) {
-      console.log('OCR skipped: imageInput string is not a valid physical file path.', imageInput);
+      console.log('OCR warning: imageInput string is not a valid physical file path.', imageInput);
       return emptyExtracted();
     }
   }
@@ -208,7 +234,7 @@ async function extractPaymentDetails(imageInput) {
     // Determine if it's a PDF
     const isPdf = Buffer.isBuffer(imageInput) 
       ? imageInput.toString('ascii', 0, 4) === '%PDF'
-      : path.extname(imageInput).toLowerCase() === '.pdf';
+      : (typeof imageInput === 'string' && path.extname(imageInput).toLowerCase() === '.pdf');
 
     if (isPdf) {
       const fileBuffer = Buffer.isBuffer(imageInput) ? imageInput : fs.readFileSync(imageInput);
@@ -242,6 +268,9 @@ async function extractPaymentDetails(imageInput) {
 
         const ocrResult = await Tesseract.recognize(processedPath, 'eng');
         text = ocrResult.data?.text || '';
+        console.log('--- OCR RAW TEXT START ---');
+        console.log(text);
+        console.log('--- OCR RAW TEXT END ---');
         extracted = extractFromText(text);
       } finally {
         if (fs.existsSync(processedPath)) fs.unlinkSync(processedPath);
@@ -259,4 +288,7 @@ async function extractPaymentDetails(imageInput) {
   }
 }
 
-module.exports = { extractPaymentDetails };
+module.exports = { 
+  extractPaymentDetails,
+  hasUsefulExtraction
+};

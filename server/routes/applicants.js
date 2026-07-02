@@ -6,7 +6,7 @@ const pool    = require('../db/pool');
 const upload  = require('../middleware/upload');
 const { authenticate, requireRole } = require('../middleware/auth');
 const { sendEmail } = require('../middleware/email');
-const { extractPaymentDetails } = require('../middleware/ocr');
+const { extractPaymentDetails, hasUsefulExtraction } = require('../middleware/ocr');
 const { getPricingConfig } = require('../utils/pricing');
 const cloudinary = require('../utils/cloudinary');
 
@@ -73,7 +73,13 @@ const toCardNumber = (id) => `UIC-2026-${String(id).padStart(4, '0')}`;
 
 const normalizeUploadPath = (filePath) => {
   if (!filePath) return null;
-  return String(filePath).replace(/\\/g, '/').replace(/^\.?\//, '');
+  const s = String(filePath);
+  // If it's already a full Cloudinary URL, return as is
+  if (s.startsWith('http')) return s;
+  // If it's a local/memory path string that shouldn't be there, suppress it
+  if (s.startsWith('memory') || s.includes('Screenshot')) return null;
+  // Fallback for any legacy local uploads
+  return s.replace(/\\/g, '/').replace(/^\.?\//, '');
 };
 
 const safeDeleteFile = (filePath) => {
@@ -570,7 +576,14 @@ router.get('/:id', authenticate, async (req, res) => {
     WHERE a.id = ?`, [req.params.id]
   );
   if (!rows.length) return res.status(404).json({ error: 'Not found' });
-  res.json(rows[0]);
+  
+  const row = rows[0];
+  row.passport_photo    = normalizeUploadPath(row.passport_photo);
+  row.birth_certificate = normalizeUploadPath(row.birth_certificate);
+  row.school_result     = normalizeUploadPath(row.school_result);
+  row.receipt_path      = normalizeUploadPath(row.receipt_path);
+  
+  res.json(row);
 });
 
 // ─── PATCH /api/applicants/:id  (admin: update applicant info) ───────────────
@@ -584,6 +597,8 @@ router.patch('/:id',
     { name: 'receipt',           maxCount: 1 },
   ]),
   async (req, res) => {
+    // Exclude file fields from auto-update as they are handled by Cloudinary logic below
+    const fileFields = ['passport_photo', 'birth_certificate', 'school_result', 'receipt'];
     const fields = [
       'surname', 'first_name', 'middle_name', 'date_of_birth', 'gender',
       'nationality', 'state_of_origin', 'lga', 'school', 'class_level',
@@ -592,7 +607,7 @@ router.patch('/:id',
       'guardian_name', 'guardian_phone', 'guardian_email', 'guardian_whatsapp',
       'blood_group', 'genotype', 'allergies', 'current_medications',
       'group_assigned', 'room_number', 'coach_assigned',
-      'is_payment_verified', 'is_medical_cleared', 'is_admitted', 'status'
+      'is_medical_cleared', 'is_admitted', 'is_payment_verified', 'status'
     ];
 
     const updates = [];
@@ -600,7 +615,8 @@ router.patch('/:id',
     const files = req.files || {};
 
     fields.forEach(f => {
-      if (req.body[f] !== undefined) {
+      // Skip if it's a file field or if value is missing
+      if (req.body[f] !== undefined && !fileFields.includes(f)) {
         updates.push(`${f} = ?`);
         params.push(req.body[f]);
       }
@@ -690,10 +706,12 @@ router.patch('/:id',
                     );
                   }
 
-                  // Run OCR on the receipt - use buffer
-                  const extracted = await extractPaymentDetails(fileData);
-                  if (extracted) {
-                    const [latestP] = await pool.query("SELECT id, transaction_ref, receipt_transaction_ref, amount_paid, receipt_amount, payment_date FROM payments WHERE applicant_id = ? ORDER BY id DESC LIMIT 1", [req.params.id]);
+                  // Run OCR on the receipt - ensure buffer used if available
+                  const ocrInput = receiptFile.buffer || receiptFile.path;
+                  const extracted = await extractPaymentDetails(ocrInput);
+                  if (extracted && hasUsefulExtraction(extracted)) {
+                    console.log(`OCR extracted for applicant ${req.params.id}:`, extracted);
+                    const [latestP] = await pool.query("SELECT * FROM payments WHERE applicant_id = ? ORDER BY id DESC LIMIT 1", [req.params.id]);
                     if (latestP.length) {
                       const p = latestP[0];
                       await pool.query(
@@ -703,10 +721,10 @@ router.patch('/:id',
                           ocr_extracted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
                          WHERE id = ?`,
                         [
-                          p.transaction_ref || extracted.transaction_ref || null,
-                          p.receipt_transaction_ref || extracted.transaction_ref || null,
-                          p.receipt_amount || extracted.amount_paid || null,
-                          p.payment_date || extracted.payment_date || null,
+                          p.transaction_ref || extracted.reference || null,
+                          p.receipt_transaction_ref || extracted.reference || null,
+                          p.receipt_amount || extracted.amount || null,
+                          p.payment_date || extracted.date || null,
                           p.id
                         ]
                       );
@@ -759,24 +777,8 @@ router.patch('/:id/documents',
     const files  = req.files || {};
     const IS_VERCEL = process.env.VERCEL === '1';
 
-    const getFilePath = (fieldName, existing) => {
-      const uploaded = files[fieldName]?.[0];
-      if (!uploaded) return existing; // keep existing if nothing new uploaded
-      return uploaded.path || null; // Return null (briefly) while background upload happens
-    };
-
-    const newPassport    = getFilePath('passport_photo',    appl.passport_photo);
-    const newBirth       = getFilePath('birth_certificate', appl.birth_certificate);
-    const newSchool      = getFilePath('school_result',     appl.school_result);
-
-    // Skip local deletion as we use Cloudinary
-    await pool.query(
-      `UPDATE applicants
-       SET passport_photo = ?, birth_certificate = ?, school_result = ?
-       WHERE id = ?`,
-      [newPassport, newBirth, newSchool, appl.id]
-    );
-
+    // We respond immediately and handle Cloudinary uploads in the background.
+    // This prevents "memory:" paths from being stored in the database.
     res.json({
       success: true,
       updated: {
