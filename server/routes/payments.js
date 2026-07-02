@@ -27,8 +27,8 @@ router.post('/submit',
 
     if (!req.file) return res.status(400).json({ error: 'Receipt file is required' });
 
-    // On Vercel (memory storage) req.file.path is undefined — store a marker instead
-    const receiptPath = req.file.path || `memory:${req.file.originalname}:${Date.now()}`;
+    // We now use Cloudinary for all storage. Initial DB entry is null until background upload completes.
+    const receiptPath = null;
 
     try {
       // Verify applicant exists by ID or form number to support both payment-link flows.
@@ -121,11 +121,12 @@ router.post('/submit',
       setImmediate(async () => {
         try {
           const studentName = (appl.full_name || 'Student').replace(/\s+/g, '_');
+          const cleanForm = (appl.form_number || applicant_id).toString().replace(/\//g, '_');
           
           if (req.file) {
             const fileData = req.file.path || req.file.buffer;
             if (fileData) {
-              const publicId = `Receipt_${studentName}_${applicantId}_${Date.now()}`;
+              const publicId = `Receipt_${cleanForm}_${studentName}_${Date.now()}`;
               const secureUrl = await cloudinary.uploadToCloudinary(fileData, 'uisa/receipts', publicId);
               
               if (secureUrl) {
@@ -137,7 +138,9 @@ router.post('/submit',
             }
           }
 
-          const extracted = await extractPaymentDetails(receiptPath);
+          // Note: extracted OCR details might still be useful even if Cloudinary fails,
+          // but we use the buffer if file.path is missing.
+          const extracted = await extractPaymentDetails(req.file.path || req.file.buffer);
 
           const [paymentRows] = await pool.query(
             `SELECT id, transaction_ref, receipt_transaction_ref, amount_paid, receipt_amount,

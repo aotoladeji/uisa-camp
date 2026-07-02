@@ -190,9 +190,9 @@ router.post('/',
           d.last_medical_checkup || null, d.family_doctor || null, d.family_doctor_phone || null,
           isTrueValue(d.consent_medical), isTrueValue(d.consent_conduct),
           isTrueValue(d.consent_media), isTrueValue(d.consent_indemnity),
-          files.passport_photo?.[0]?.path   || (files.passport_photo?.[0]   ? `memory:${files.passport_photo[0].originalname}:${Date.now()}` : null),
-          files.birth_certificate?.[0]?.path || (files.birth_certificate?.[0] ? `memory:${files.birth_certificate[0].originalname}:${Date.now()}` : null),
-          files.school_result?.[0]?.path    || (files.school_result?.[0]    ? `memory:${files.school_result[0].originalname}:${Date.now()}` : null),
+          null, // passport_photo
+          null, // birth_certificate
+          null, // school_result
           initialStatus,
           req.ip
         ]
@@ -229,11 +229,13 @@ router.post('/',
       // Process file uploads to Cloudinary after response
       setImmediate(async () => {
         try {
-          const studentName = `${d.first_name}_${d.surname}`.replace(/\s+/g, '_');
+          const studentName = `${d.surname}_${d.first_name}`.replace(/\s+/g, '_');
+          const cleanForm = formNumber.replace(/\//g, '_');
+
           const fileTasks = [
-            { field: 'passport_photo',   folder: 'photos' },
-            { field: 'birth_certificate', folder: 'documents' },
-            { field: 'school_result',    folder: 'documents' }
+            { field: 'passport_photo',   folder: 'photos',    prefix: 'Passport' },
+            { field: 'birth_certificate', folder: 'documents', prefix: 'BirthCert' },
+            { field: 'school_result',    folder: 'documents', prefix: 'Result' }
           ];
 
           for (const task of fileTasks) {
@@ -241,7 +243,7 @@ router.post('/',
             if (file) {
               const fileData = file.path || file.buffer;
               if (fileData) {
-                const publicId = `${task.field}_${studentName}_${applicantId}`;
+                const publicId = `${task.prefix}_${cleanForm}_${studentName}`;
                 const secureUrl = await cloudinary.uploadToCloudinary(fileData, `uisa/applicants/${task.folder}`, publicId);
                 
                 if (secureUrl) {
