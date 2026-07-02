@@ -89,6 +89,9 @@ CREATE TABLE IF NOT EXISTS applicants (
 
   -- Application Status
   status          TEXT DEFAULT 'Pending' CHECK (status IN ('Pending','Payment Submitted','Payment Verified','Medical Cleared','Admitted','Rejected')),
+  is_medical_cleared INTEGER DEFAULT 0,
+  is_admitted        INTEGER DEFAULT 0,
+  is_payment_verified INTEGER DEFAULT 0,
   id_card_generated INTEGER DEFAULT 0,
   id_card_generated_at TEXT,
   group_assigned  TEXT,
@@ -161,18 +164,17 @@ CREATE TABLE IF NOT EXISTS audit_log (
 );
 
 -- ============================================================
--- NOTIFICATIONS TABLE
+-- EMAIL LOGS TABLE
 -- ============================================================
-CREATE TABLE IF NOT EXISTS notifications (
-  id            INTEGER PRIMARY KEY AUTOINCREMENT,
-  applicant_id  INTEGER,
-  type          TEXT DEFAULT 'email' CHECK (type IN ('email','sms')),
-  subject       TEXT,
-  message       TEXT,
-  sent_at       TEXT,
-  status        TEXT DEFAULT 'pending' CHECK (status IN ('pending','sent','failed')),
-  created_at    TEXT DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (applicant_id) REFERENCES applicants(id) ON DELETE CASCADE
+CREATE TABLE IF NOT EXISTS email_logs (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  applicant_id    INTEGER NOT NULL,
+  email_type      TEXT NOT NULL,
+  recipient       TEXT NOT NULL,
+  sent_by         INTEGER, -- admin user id
+  status          TEXT DEFAULT 'Sent',
+  created_at      TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (applicant_id) REFERENCES applicants (id) ON DELETE CASCADE
 );
 
 -- ============================================================
@@ -193,7 +195,7 @@ CREATE INDEX IF NOT EXISTS idx_applicants_form_number ON applicants(form_number)
 CREATE INDEX IF NOT EXISTS idx_payments_applicant_id ON payments(applicant_id);
 CREATE INDEX IF NOT EXISTS idx_payments_verification_status ON payments(verification_status);
 CREATE INDEX IF NOT EXISTS idx_audit_log_admin_id ON audit_log(admin_id);
-CREATE INDEX IF NOT EXISTS idx_notifications_applicant_id ON notifications(applicant_id);
+CREATE INDEX IF NOT EXISTS idx_email_logs_applicant_id ON email_logs(applicant_id);
 
 -- ============================================================
 -- DEFAULT DATA

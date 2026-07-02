@@ -551,16 +551,19 @@ router.get('/stats/summary', authenticate, async (req, res) => {
     
     // Normalize revenue keys
     const revResult = revRows && revRows.length > 0 ? revRows[0] : {};
-    const normalizedRevenue = {
-      total_revenue: revResult.total_revenue || 0,
-      total_payments: revResult.total_payments || 0
-    };
+    const normalizedRevenue = {};
+    Object.keys(revResult).forEach(key => {
+      normalizedRevenue[key.toLowerCase()] = revResult[key];
+    });
 
     res.json({ 
       counts: normalizedCounts, 
       sportBreakdown: sportBreakdown || [], 
       categoryBreakdown: categoryBreakdown || [], 
-      revenue: normalizedRevenue 
+      revenue: {
+        total_revenue: normalizedRevenue.total_revenue || 0,
+        total_payments: normalizedRevenue.total_payments || 0
+      }
     });
   } catch (err) {
     console.error('Stats error DETAILED:', err);

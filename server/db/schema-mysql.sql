@@ -74,6 +74,9 @@ CREATE TABLE IF NOT EXISTS applicants (
   school_result    TEXT,
 
   status          TEXT DEFAULT 'Pending' CHECK (status IN ('Pending','Payment Submitted','Payment Verified','Medical Cleared','Admitted','Rejected')),
+  is_medical_cleared BOOLEAN DEFAULT FALSE,
+  is_admitted        BOOLEAN DEFAULT FALSE,
+  is_payment_verified BOOLEAN DEFAULT FALSE,
   id_card_generated BOOLEAN DEFAULT FALSE,
   id_card_generated_at DATETIME,
   group_assigned  TEXT,
@@ -109,7 +112,16 @@ CREATE TABLE IF NOT EXISTS payments (
   updated_at          DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (applicant_id) REFERENCES applicants(id) ON DELETE CASCADE
 );
-
+CREATE TABLE IF NOT EXISTS email_logs (
+  id              INT AUTO_INCREMENT PRIMARY KEY,
+  applicant_id    INT NOT NULL,
+  email_type      VARCHAR(50) NOT NULL,
+  recipient       VARCHAR(255) NOT NULL,
+  sent_by         INT,
+  status          VARCHAR(100) DEFAULT 'Sent',
+  created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (applicant_id) REFERENCES applicants(id) ON DELETE CASCADE
+);
 CREATE TABLE IF NOT EXISTS admin_users (
   id            INT AUTO_INCREMENT PRIMARY KEY,
   name          TEXT NOT NULL,
