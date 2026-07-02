@@ -21,15 +21,14 @@ const TIMELINE = [
   { key: 'admitted',         label: 'Admitted' },
 ];
 
-function getTimelineStep(status) {
-  switch(status) {
-    case 'Pending':           return 0;
-    case 'Payment Submitted': return 1;
-    case 'Payment Verified':  return 2;
-    case 'Medical Cleared':   return 3;
-    case 'Admitted':          return 4;
-    default:                  return 0;
-  }
+function getTimelineStep(app) {
+  if (app.status === 'Rejected') return -1;
+  let step = 0;
+  if (app.status !== 'Pending') step = 1;
+  if (app.is_payment_verified) step = 2;
+  if (app.is_medical_cleared) step = 3;
+  if (app.is_admitted) step = 4;
+  return step;
 }
 
 export default function StatusPage() {
@@ -60,7 +59,7 @@ export default function StatusPage() {
   const result  = results?.[0] ?? null;
   const cfg = result ? (STATUS_CONFIG[result.status] || STATUS_CONFIG['Pending']) : null;
   const StatusIcon = cfg?.icon;
-  const timelineStep = result ? getTimelineStep(result.status) : 0;
+  const timelineStep = result ? getTimelineStep(result) : 0;
   const isRejected = result?.status === 'Rejected';
 
   const buildAdmissionLetterHtml = (app) => {
@@ -230,7 +229,7 @@ export default function StatusPage() {
         {results && results.map((result, idx) => {
           const resCfg = STATUS_CONFIG[result.status] || STATUS_CONFIG['Pending'];
           const ResIcon = resCfg.icon;
-          const resTimelineStep = getTimelineStep(result.status);
+          const resTimelineStep = getTimelineStep(result);
           const resRejected = result.status === 'Rejected';
           return (
           <div key={result.id} className="card" style={{ overflow: 'hidden', marginBottom: results.length > 1 ? 20 : 0 }}>

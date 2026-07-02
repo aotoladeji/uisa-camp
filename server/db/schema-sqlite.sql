@@ -77,6 +77,9 @@ CREATE TABLE IF NOT EXISTS applicants (
   school_result    TEXT,
 
   status          TEXT DEFAULT 'Pending' CHECK (status IN ('Pending','Payment Submitted','Payment Verified','Medical Cleared','Admitted','Rejected')),
+  is_medical_cleared INTEGER DEFAULT 0,
+  is_admitted        INTEGER DEFAULT 0,
+  is_payment_verified INTEGER DEFAULT 0,
   id_card_generated INTEGER DEFAULT 0,
   id_card_generated_at TEXT,
   group_assigned  TEXT,
@@ -112,7 +115,16 @@ CREATE TABLE IF NOT EXISTS payments (
   updated_at          TEXT DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (applicant_id) REFERENCES applicants(id) ON DELETE CASCADE
 );
-
+CREATE TABLE IF NOT EXISTS email_logs (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  applicant_id    INTEGER NOT NULL,
+  email_type      TEXT NOT NULL,
+  recipient       TEXT NOT NULL,
+  sent_by         INTEGER, -- admin user id
+  status          TEXT DEFAULT 'Sent',
+  created_at      TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (applicant_id) REFERENCES applicants (id) ON DELETE CASCADE
+);
 CREATE TABLE IF NOT EXISTS admin_users (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
   name          TEXT NOT NULL,

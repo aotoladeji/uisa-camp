@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Search, Eye, ChevronLeft, ChevronRight, Trash2, Download } from 'lucide-react';
+import { Search, Eye, ChevronLeft, ChevronRight, Trash2, Download, ShieldCheck, Activity, CheckCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
@@ -264,7 +264,14 @@ export default function AdminApplicants() {
                         </span>
                       ) : <span style={{ color: 'var(--text-3)', fontSize: 12 }}>—</span>}
                     </td>
-                    <td><span className={`badge ${BADGE_MAP[row.status] || 'badge-pending'}`}>{row.status}</span></td>
+                    <td>
+                      <span className={`badge ${BADGE_MAP[row.status] || 'badge-pending'}`}>{row.status}</span>
+                      <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+                        {row.is_medical_cleared === 1 && <Activity size={12} color="#10b981" title="Medical Cleared" />}
+                        {row.is_admitted === 1 && <ShieldCheck size={12} color="#8b5cf6" title="Admitted" />}
+                        {row.is_payment_verified === 1 && <CheckCircle size={12} color="#f59e0b" title="Payment Verified" />}
+                      </div>
+                    </td>
                     <td style={{ fontSize: 12, color: 'var(--text-3)' }}>
                       {new Date(row.created_at).toLocaleDateString('en-NG', { day: 'numeric', month: 'short' })}
                     </td>

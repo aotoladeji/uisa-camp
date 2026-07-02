@@ -5,6 +5,7 @@ const { authenticate, requireRole } = require('../middleware/auth');
 const { sendEmail } = require('../middleware/email');
 const { extractPaymentDetails } = require('../middleware/ocr');
 const { getPricingConfig } = require('../utils/pricing');
+const cloudinary = require('../utils/cloudinary');
 
 const router = express.Router();
 
@@ -116,9 +117,26 @@ router.post('/submit',
         pricing
       });
 
-      // Process OCR and email after responding to reduce submit latency.
+      // Process OCR and Cloudinary upload after responding
       setImmediate(async () => {
         try {
+          const studentName = (appl.full_name || 'Student').replace(/\s+/g, '_');
+          
+          if (req.file) {
+            const fileData = req.file.path || req.file.buffer;
+            if (fileData) {
+              const publicId = `Receipt_${studentName}_${applicantId}_${Date.now()}`;
+              const secureUrl = await cloudinary.uploadToCloudinary(fileData, 'uisa/receipts', publicId);
+              
+              if (secureUrl) {
+                await pool.query(
+                  "UPDATE payments SET receipt_path = ? WHERE applicant_id = ?",
+                  [secureUrl, applicantId]
+                );
+              }
+            }
+          }
+
           const extracted = await extractPaymentDetails(receiptPath);
 
           const [paymentRows] = await pool.query(
@@ -154,13 +172,6 @@ router.post('/submit',
               ]
             );
           }
-
-          await sendEmail(appl.guardian_email, 'payment_submitted', {
-            form_number: appl.form_number,
-            full_name: appl.full_name,
-            guardian_name: appl.guardian_name,
-            amount: submittedAmount,
-          });
         } catch (bgErr) {
           console.warn('Background payment post-processing failed:', bgErr.message);
         }
@@ -252,12 +263,6 @@ router.patch('/:id/verify', authenticate, requireRole('admin','verifier','super_
        WHERE id=?`,
       [pmt.applicant_id]
     );
-    await sendEmail(pmt.guardian_email, 'payment_verified', {
-      form_number: pmt.form_number,
-      full_name: pmt.full_name,
-      guardian_name: pmt.guardian_name,
-      amount: pmt.amount_paid,
-    });
   }
 
   // Audit log

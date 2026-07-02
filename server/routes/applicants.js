@@ -7,6 +7,7 @@ const upload  = require('../middleware/upload');
 const { authenticate, requireRole } = require('../middleware/auth');
 const { sendEmail } = require('../middleware/email');
 const { getPricingConfig } = require('../utils/pricing');
+const cloudinary = require('../utils/cloudinary');
 
 const router = express.Router();
 
@@ -76,6 +77,9 @@ const normalizeUploadPath = (filePath) => {
 
 const safeDeleteFile = (filePath) => {
   if (!filePath) return;
+  // If we have a http link, don't try to delete local file
+  if (filePath.startsWith('http')) return;
+  
   const absolutePath = path.resolve(process.cwd(), filePath);
   try {
     if (fs.existsSync(absolutePath)) {
@@ -221,20 +225,35 @@ router.post('/',
         message: 'Registration successful. Check your email for payment instructions.'
       });
 
-      // Send confirmation email after response so user does not wait on SMTP latency.
+      // Process file uploads to Cloudinary after response
       setImmediate(async () => {
         try {
-          await sendEmail(d.guardian_email, 'registration_received', {
-            form_number: formNumber,
-            full_name: `${d.first_name} ${d.surname}`,
-            guardian_name: d.guardian_name,
-            sport: d.sport_selection,
-            category,
-            amount,
-            early_bird: earlyBird,
-          });
-        } catch (emailErr) {
-          console.log('Email send skipped:', emailErr.message);
+          const studentName = `${d.first_name}_${d.surname}`.replace(/\s+/g, '_');
+          const fileTasks = [
+            { field: 'passport_photo',   folder: 'photos' },
+            { field: 'birth_certificate', folder: 'documents' },
+            { field: 'school_result',    folder: 'documents' }
+          ];
+
+          for (const task of fileTasks) {
+            const file = files[task.field]?.[0];
+            if (file) {
+              const fileData = file.path || file.buffer;
+              if (fileData) {
+                const publicId = `${task.field}_${studentName}_${applicantId}`;
+                const secureUrl = await cloudinary.uploadToCloudinary(fileData, `uisa/applicants/${task.folder}`, publicId);
+                
+                if (secureUrl) {
+                  await pool.query(
+                    `UPDATE applicants SET ${task.field} = ? WHERE id = ?`,
+                    [secureUrl, applicantId]
+                  );
+                }
+              }
+            }
+          }
+        } catch (warnErr) {
+          console.warn('Background task warning:', warnErr.message);
         }
       });
     } catch (err) {
@@ -343,7 +362,18 @@ router.get('/', authenticate, async (req, res) => {
   const params = [];
   let where = 'WHERE 1=1';
 
-  if (status) { where += ' AND a.status = ?'; params.push(status); }
+  if (status) {
+    if (status === 'Medical Cleared') {
+      where += ' AND a.is_medical_cleared = 1';
+    } else if (status === 'Admitted') {
+      where += ' AND a.is_admitted = 1';
+    } else if (status === 'Payment Verified') {
+      where += ' AND a.is_payment_verified = 1';
+    } else {
+      where += ' AND a.status = ?';
+      params.push(status);
+    }
+  }
   if (sport)  { where += ' AND a.sport_selection = ?'; params.push(sport); }
   if (search) {
     where += ' AND (a.surname LIKE ? OR a.first_name LIKE ? OR a.form_number LIKE ? OR a.guardian_email LIKE ?)';
@@ -354,6 +384,7 @@ router.get('/', authenticate, async (req, res) => {
   const [listRows] = await pool.query(`
     SELECT a.id, a.form_number, a.surname, a.first_name, a.gender,
            a.age, a.age_category, a.sport_selection, a.status,
+           a.is_medical_cleared, a.is_admitted, a.is_payment_verified,
            a.guardian_name, a.guardian_email, a.guardian_phone,
            p.verification_status AS payment_status, p.amount_paid,
            a.created_at
@@ -377,7 +408,7 @@ router.get('/', authenticate, async (req, res) => {
 router.get('/id-cards', authenticate, async (req, res) => {
   const { ids } = req.query;
   const params = [];
-  let where = "WHERE (a.status IN ('Admitted','Medical Cleared','Payment Verified') OR COALESCE(a.id_card_generated, FALSE) = TRUE)";
+  let where = "WHERE (a.is_admitted = 1 OR COALESCE(a.id_card_generated, FALSE) = TRUE)";
 
   if (ids) {
     const parsedIds = String(ids)
@@ -479,32 +510,58 @@ router.post('/bulk-delete', authenticate, requireRole('admin','super_admin'), as
 // ─── GET /api/applicants/stats/summary  (admin dashboard) ─────────────────────
 // IMPORTANT: must be defined BEFORE /:id route or Express will match 'stats' as an id
 router.get('/stats/summary', authenticate, async (req, res) => {
-  const [counts] = await pool.query(`
-    SELECT
-      COUNT(*) AS total,
-      SUM(CASE WHEN status='Pending' THEN 1 ELSE 0 END) AS pending,
-      SUM(CASE WHEN status='Payment Submitted' THEN 1 ELSE 0 END) AS payment_submitted,
-      SUM(CASE WHEN status='Payment Verified' THEN 1 ELSE 0 END) AS payment_verified,
-      SUM(CASE WHEN status='Medical Cleared' THEN 1 ELSE 0 END) AS medical_cleared,
-      SUM(CASE WHEN status='Admitted' THEN 1 ELSE 0 END) AS admitted,
-      SUM(CASE WHEN status='Rejected' THEN 1 ELSE 0 END) AS rejected
-    FROM applicants`
-  );
-  const [sportBreakdown] = await pool.query(`
-    SELECT sport_selection, COUNT(*) AS count FROM applicants GROUP BY sport_selection`
-  );
-  const [categoryBreakdown] = await pool.query(`
-    SELECT age_category, COUNT(*) AS count
-    FROM applicants
-    WHERE age_category IS NOT NULL AND age_category != ''
-    GROUP BY age_category`
-  );
-  const [revenue] = await pool.query(`
-    SELECT COALESCE(SUM(amount_paid),0) AS total_revenue,
-           COUNT(*) AS total_payments
-    FROM payments WHERE verification_status = 'Verified'`
-  );
-  res.json({ counts: counts[0], sportBreakdown, categoryBreakdown, revenue: revenue[0] });
+  try {
+    const [counts] = await pool.query(`
+      SELECT
+        COUNT(*) AS total,
+        COUNT(CASE WHEN UPPER(TRIM(status))='PENDING' THEN 1 END) AS pending,
+        COUNT(CASE WHEN UPPER(TRIM(status))='PAYMENT SUBMITTED' THEN 1 END) AS payment_submitted,
+        COUNT(CASE WHEN is_payment_verified = 1 THEN 1 END) AS payment_verified,
+        COUNT(CASE WHEN is_medical_cleared = 1 THEN 1 END) AS medical_cleared,
+        COUNT(CASE WHEN is_admitted = 1 THEN 1 END) AS admitted,
+        COUNT(CASE WHEN UPPER(TRIM(status))='REJECTED' THEN 1 END) AS rejected
+      FROM applicants`
+    );
+
+    // Normalize keys to lowercase to ensure frontend compatibility
+    const countsResult = counts[0];
+    const normalizedCounts = {};
+    for (const key in countsResult) {
+      normalizedCounts[key.toLowerCase()] = countsResult[key];
+    }
+    
+    const [sportRows] = await pool.query(`
+      SELECT sport_selection, COUNT(*) AS count FROM applicants GROUP BY sport_selection`
+    );
+    const [catRows] = await pool.query(`
+      SELECT age_category, COUNT(*) AS count
+      FROM applicants
+      WHERE age_category IS NOT NULL AND age_category != ''
+      GROUP BY age_category`
+    );
+    const [revRows] = await pool.query(`
+      SELECT COALESCE(SUM(amount_paid),0) AS total_revenue,
+             COUNT(*) AS total_payments
+      FROM payments WHERE UPPER(TRIM(verification_status)) = 'VERIFIED'`
+    );
+    
+    // Normalize revenue keys
+    const revResult = revRows[0];
+    const normalizedRevenue = {};
+    for (const key in revResult) {
+      normalizedRevenue[key.toLowerCase()] = revResult[key];
+    }
+
+    res.json({ 
+      counts: normalizedCounts, 
+      sportBreakdown: sportRows, 
+      categoryBreakdown: catRows, 
+      revenue: normalizedRevenue 
+    });
+  } catch (err) {
+    console.error('Stats error:', err);
+    res.status(500).json({ error: 'Failed to retrieve dashboard stats' });
+  }
 });
 
 // ─── GET /api/applicants/:id  (admin) ────────────────────────────────────────
@@ -523,6 +580,62 @@ router.get('/:id', authenticate, async (req, res) => {
   res.json(rows[0]);
 });
 
+// ─── PATCH /api/applicants/:id  (admin: update applicant info) ───────────────
+router.patch('/:id', authenticate, requireRole('admin', 'super_admin'), async (req, res) => {
+  const fields = [
+    'surname', 'first_name', 'middle_name', 'date_of_birth', 'gender',
+    'nationality', 'state_of_origin', 'lga', 'school', 'class_level',
+    'home_address', 'city', 'state', 'age', 'age_category',
+    'sport_selection', 'experience_level', 'tshirt_size',
+    'guardian_name', 'guardian_phone', 'guardian_email', 'guardian_whatsapp',
+    'blood_group', 'genotype', 'allergies', 'current_medications',
+    'group_assigned', 'room_number', 'coach_assigned'
+  ];
+
+  const updates = [];
+  const params = [];
+
+  fields.forEach(f => {
+    if (req.body[f] !== undefined) {
+      updates.push(`${f} = ?`);
+      params.push(req.body[f]);
+    }
+  });
+
+  // Automatically recalculate age and category if DOB changes
+  if (req.body.date_of_birth) {
+    const dob = new Date(req.body.date_of_birth);
+    if (!isNaN(dob.getTime())) {
+      const age = new Date().getFullYear() - dob.getFullYear();
+      const category = age <= 17 ? 'Junior (6-17)' : 'Elite (18-23)';
+      
+      if (!req.body.age) {
+        updates.push(`age = ?`);
+        params.push(age);
+      }
+      if (!req.body.age_category) {
+        updates.push(`age_category = ?`);
+        params.push(category);
+      }
+    }
+  }
+
+  if (updates.length === 0) return res.status(400).json({ error: 'No fields to update' });
+
+  params.push(req.params.id);
+
+  try {
+    await pool.query(
+      `UPDATE applicants SET ${updates.join(', ')} WHERE id = ?`,
+      params
+    );
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Update applicant error:', err);
+    res.status(500).json({ error: 'Failed to update applicant information' });
+  }
+});
+
 // ─── PATCH /api/applicants/:id/documents  (public: reupload passport/docs) ───
 // Authenticated by form_number + guardian_email — no admin token needed.
 router.patch('/:id/documents',
@@ -538,7 +651,7 @@ router.patch('/:id/documents',
     }
 
     const [rows] = await pool.query(
-      `SELECT id, passport_photo, birth_certificate, school_result
+      `SELECT id, first_name, surname, passport_photo, birth_certificate, school_result
        FROM applicants
        WHERE id = ?
          AND LOWER(TRIM(form_number))     = LOWER(TRIM(?))
@@ -584,86 +697,150 @@ router.patch('/:id/documents',
         school_result:     !!files.school_result?.[0],
       },
     });
+
+    // Background upload to Cloudinary
+    setImmediate(async () => {
+      try {
+        const studentName = `${appl.first_name || 'Student'}_${appl.surname || 'Manual'}`.replace(/\s+/g, '_');
+        
+        const tasks = [
+          { field: 'passport_photo',    folder: 'photos' },
+          { field: 'birth_certificate',  folder: 'documents' },
+          { field: 'school_result',     folder: 'documents' }
+        ];
+
+        for (const task of tasks) {
+          const file = files[task.field]?.[0];
+          if (file) {
+            const fileData = file.path || file.buffer;
+            if (fileData) {
+              const publicId = `${task.field}_${studentName}_${req.params.id}_${Date.now()}`;
+              const secureUrl = await cloudinary.uploadToCloudinary(fileData, `uisa/applicants/${task.folder}`, publicId);
+              
+              if (secureUrl) {
+                await pool.query(
+                  `UPDATE applicants SET ${task.field} = ? WHERE id = ?`,
+                  [secureUrl, req.params.id]
+                );
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Background Cloudinary re-upload failed:', err.message);
+      }
+    });
   }
 );
-router.patch('/:id/status', authenticate, requireRole('admin','super_admin'), async (req, res) => {
-  const { status, group_assigned, room_number, coach_assigned } = req.body;
-  const allowed = ['Pending','Payment Submitted','Payment Verified','Medical Cleared','Admitted','Rejected'];
-  if (!allowed.includes(status)) return res.status(400).json({ error: 'Invalid status' });
 
-  // Status rank — higher = more advanced. An update will never demote a more
-  // advanced status, EXCEPT for Rejected which is always applied intentionally.
-  const STATUS_RANK = {
-    'Pending': 0,
-    'Payment Submitted': 1,
-    'Payment Verified': 2,
-    'Medical Cleared': 3,
-    'Admitted': 4,
-    'Rejected': -1,
+// ─── POST /api/applicants/:id/send-email (admin: manual trigger) ─────────────
+router.post('/:id/send-email', authenticate, requireRole('admin', 'super_admin'), async (req, res) => {
+  const { type } = req.body;
+  const allowed = ['registration_received', 'payment_submitted', 'payment_verified', 'admitted'];
+  if (!allowed.includes(type)) return res.status(400).json({ error: 'Invalid email type' });
+
+  try {
+    const [rows] = await pool.query(`
+      SELECT a.*, p.amount_paid 
+      FROM applicants a 
+      LEFT JOIN payments p ON p.applicant_id = a.id
+      WHERE a.id = ?`, [req.params.id]);
+
+    if (!rows.length) return res.status(404).json({ error: 'Applicant not found' });
+    const appl = rows[0];
+
+    await sendEmail(appl.guardian_email, type, {
+      form_number: appl.form_number,
+      full_name: `${appl.first_name} ${appl.surname}`,
+      guardian_name: appl.guardian_name,
+      sport: appl.sport_selection,
+      category: appl.age_category,
+      amount: appl.amount_paid || 0
+    }, appl.id, req.admin.id);
+
+    res.json({ success: true, message: `Email (${type}) sent to ${appl.guardian_email}` });
+  } catch (err) {
+    console.error('Manual email send failed:', err);
+    res.status(500).json({ error: 'Failed to send email' });
+  }
+});
+
+router.patch('/:id/status', authenticate, requireRole('admin','super_admin'), async (req, res) => {
+  const { 
+    status, // Lifecycle status (Legacy)
+    is_medical_cleared, 
+    is_admitted, 
+    is_payment_verified,
+    group_assigned, 
+    room_number, 
+    coach_assigned 
+  } = req.body;
+
+  // Fetch current data
+  const [currentRows] = await pool.query('SELECT * FROM applicants WHERE id = ?', [req.params.id]);
+  if (!currentRows.length) return res.status(404).json({ error: 'Applicant not found' });
+  const current = currentRows[0];
+
+  const updates = [];
+  const params = [];
+
+  const addUpdate = (col, val) => {
+    if (val !== undefined) {
+      updates.push(`${col} = ?`);
+      params.push(val);
+    }
   };
 
-  // Fetch current status first
-  const [current] = await pool.query('SELECT status FROM applicants WHERE id = ?', [req.params.id]);
-  if (!current.length) return res.status(404).json({ error: 'Applicant not found' });
-
-  const currentStatus = current[0].status;
-  const currentRank   = STATUS_RANK[currentStatus] ?? 0;
-  const newRank       = STATUS_RANK[status] ?? 0;
-
-  // Prevent downgrading an already-advanced status unless explicitly rejecting
-  // e.g. do not let 'Medical Cleared' (3) overwrite 'Admitted' (4)
-  let effectiveStatus = status;
-  if (status !== 'Rejected' && newRank < currentRank) {
-    // Admin is trying to set a lower status — keep the higher one but still
-    // allow assignment fields (group, room, coach) to be updated
-    effectiveStatus = currentStatus;
+  addUpdate('status', status);
+  addUpdate('is_medical_cleared', is_medical_cleared === true || is_medical_cleared === 1 ? 1 : (is_medical_cleared === false || is_medical_cleared === 0 ? 0 : undefined));
+  addUpdate('is_admitted', is_admitted === true || is_admitted === 1 ? 1 : (is_admitted === false || is_admitted === 0 ? 0 : undefined));
+  addUpdate('is_payment_verified', is_payment_verified === true || is_payment_verified === 1 ? 1 : (is_payment_verified === false || is_payment_verified === 0 ? 0 : undefined));
+  
+  if (is_admitted === true || status === 'Admitted') {
+    updates.push('id_card_generated = TRUE');
+    updates.push('id_card_generated_at = COALESCE(id_card_generated_at, CURRENT_TIMESTAMP)');
   }
 
-  await pool.query(`
-    UPDATE applicants SET status = ?,
-      id_card_generated = CASE
-        WHEN ? = 'Admitted' THEN TRUE
-        ELSE id_card_generated
-      END,
-      id_card_generated_at = CASE
-        WHEN ? = 'Admitted' THEN COALESCE(id_card_generated_at, CURRENT_TIMESTAMP)
-        ELSE id_card_generated_at
-      END,
-      group_assigned  = COALESCE(?, group_assigned),
-      room_number     = COALESCE(?, room_number),
-      coach_assigned  = COALESCE(?, coach_assigned)
-    WHERE id = ?`,
-    [effectiveStatus, effectiveStatus, effectiveStatus,
-     group_assigned||null, room_number||null, coach_assigned||null,
-     req.params.id]
-  );
+  addUpdate('group_assigned', group_assigned);
+  addUpdate('room_number', room_number);
+  addUpdate('coach_assigned', coach_assigned);
+
+  if (updates.length > 0) {
+    params.push(req.params.id);
+    await pool.query(`UPDATE applicants SET ${updates.join(', ')} WHERE id = ?`, params);
+  }
+
+  // Sync Payment Table if verified changed
+  if (is_payment_verified === true) {
+    const [existingPmt] = await pool.query("SELECT id FROM payments WHERE applicant_id = ?", [req.params.id]);
+    if (existingPmt.length) {
+      await pool.query(
+        "UPDATE payments SET verification_status = 'Verified', verified_at = CURRENT_TIMESTAMP WHERE applicant_id = ?",
+        [req.params.id]
+      );
+    } else {
+      await pool.query(
+        `INSERT INTO payments (applicant_id, amount_paid, fee_type, verification_status, verified_at, notes)
+         VALUES (?, 0, 'Regular', 'Verified', CURRENT_TIMESTAMP, 'Manually verified via status update')`,
+        [req.params.id]
+      );
+    }
+  }
 
   // Audit log
   await pool.query(
     'INSERT INTO audit_log (admin_id, action, table_name, record_id, new_value) VALUES (?,?,?,?,?)',
-    [req.admin.id, 'status_change', 'applicants', req.params.id,
-     JSON.stringify({ requested: status, applied: effectiveStatus })]
+    [req.admin.id, 'status_change', 'applicants', req.params.id, JSON.stringify(req.body)]
   );
 
-  // Send appropriate email
-  const [applRows] = await pool.query(
+  // Fetch updated info for ID card etc
+  const [updatedRows] = await pool.query(
     'SELECT *, first_name || \' \' || surname AS full_name FROM applicants WHERE id = ?',
     [req.params.id]
   );
-  const appl = applRows[0];
-  const templateMap = { Admitted: 'admitted', Rejected: 'rejected' };
-  if (templateMap[effectiveStatus] && effectiveStatus !== currentStatus) {
-    await sendEmail(appl.guardian_email, templateMap[effectiveStatus], {
-      form_number: appl.form_number,
-      full_name: appl.full_name,
-      guardian_name: appl.guardian_name,
-      sport: appl.sport_selection,
-      group: group_assigned, room: room_number, coach: coach_assigned,
-      reason: req.body.rejection_reason,
-    });
-  }
+  const appl = updatedRows[0];
 
-  const idCard = effectiveStatus === 'Admitted'
+  const idCard = (appl.is_admitted || appl.status === 'Admitted')
     ? {
         applicant_id: appl.id,
         card_number: toCardNumber(appl.id),
@@ -678,10 +855,7 @@ router.patch('/:id/status', authenticate, requireRole('admin','super_admin'), as
   res.json({
     success: true,
     id_card: idCard,
-    applied_status: effectiveStatus,
-    note: effectiveStatus !== status
-      ? `Status was not downgraded. Current status '${currentStatus}' was preserved.`
-      : undefined,
+    applied_status: appl.status
   });
 });
 

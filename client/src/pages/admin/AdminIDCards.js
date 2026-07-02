@@ -18,6 +18,7 @@ const toDisplayDate = (value) => {
 
 const toPhotoUrl = (path) => {
   if (!path) return '';
+  if (path.startsWith('http')) return path;
   return `${serverUrl}/${String(path).replace(/^\/+/, '')}`;
 };
 

@@ -70,6 +70,7 @@ export default function AdminDashboard() {
         }
       } catch (err) {
         console.error(err);
+        toast.error('Failed to load dashboard statistics');
       } finally {
         setLoading(false);
       }
