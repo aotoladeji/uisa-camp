@@ -155,10 +155,11 @@ function mergeMissingFields(primary, secondary) {
   return merged;
 }
 
-async function ocrPdfPage(imagePath, pageIndex) {
-  const pageImagePath = `${imagePath}.page-${pageIndex + 1}.jpg`;
+async function ocrPdfPage(imageOrPath, pageIndex) {
+  const pageImagePath = path.join(process.cwd(), `temp-ocr-${Date.now()}-${pageIndex + 1}.jpg`);
   try {
-    await sharp(imagePath, { density: 300, page: pageIndex })
+    const input = Buffer.isBuffer(imageOrPath) ? imageOrPath : imageOrPath;
+    await sharp(input, { density: 300, page: pageIndex })
       .flatten({ background: '#ffffff' })
       .greyscale()
       .normalize()
@@ -166,9 +167,7 @@ async function ocrPdfPage(imagePath, pageIndex) {
       .jpeg({ quality: 90 })
       .toFile(pageImagePath);
 
-    const ocrResult = await Tesseract.recognize(pageImagePath, 'eng', {
-      logger: m => console.log(m)
-    });
+    const ocrResult = await Tesseract.recognize(pageImagePath, 'eng');
     return ocrResult.data?.text || '';
   } finally {
     if (fs.existsSync(pageImagePath)) fs.unlinkSync(pageImagePath);
@@ -177,40 +176,49 @@ async function ocrPdfPage(imagePath, pageIndex) {
 
 /**
  * Extract payment details from receipt image using OCR
- * @param {string} imagePath - Path to the receipt image
+ * @param {string|Buffer} imageInput - Path to the receipt image or its Buffer
  * @returns {Promise<Object>} Extracted payment details
  */
-async function extractPaymentDetails(imagePath) {
-  // Skip OCR entirely on Vercel or when native modules are unavailable
+async function extractPaymentDetails(imageInput) {
+  // Skip OCR entirely when native modules are unavailable
   if (!sharp || !Tesseract) {
-    console.log('OCR skipped: native modules not available in this environment.');
+    console.log('OCR skipped: native modules (sharp/tesseract) not available.');
     return emptyExtracted();
   }
 
-  // Also skip when using memory storage (no file path on disk)
-  if (!imagePath || !fs.existsSync(imagePath)) {
-    console.log('OCR skipped: file not on disk (memory storage mode).');
+  // imageInput can be a file path (string) or a file buffer
+  if (!imageInput) {
+    console.log('OCR skipped: No image input provided.');
     return emptyExtracted();
+  }
+
+  // If it's a string, it MUST be a valid existing file path
+  if (typeof imageInput === 'string') {
+    if (imageInput.startsWith('memory') || !fs.existsSync(imageInput)) {
+      console.log('OCR skipped: imageInput string is not a valid physical file path.', imageInput);
+      return emptyExtracted();
+    }
   }
 
   try {
-    const ext = path.extname(imagePath).toLowerCase();
     let text = '';
     let extracted = emptyExtracted();
 
-    if (ext === '.pdf') {
-      const fileBuffer = fs.readFileSync(imagePath);
+    // Determine if it's a PDF
+    const isPdf = Buffer.isBuffer(imageInput) 
+      ? imageInput.toString('ascii', 0, 4) === '%PDF'
+      : path.extname(imageInput).toLowerCase() === '.pdf';
+
+    if (isPdf) {
+      const fileBuffer = Buffer.isBuffer(imageInput) ? imageInput : fs.readFileSync(imageInput);
       const parsed = await pdfParse(fileBuffer);
       text = parsed.text || '';
-
       extracted = extractFromText(text);
 
-      // Fallback for scanned/image-only PDFs: render first pages to images and OCR them.
       if (!hasUsefulExtraction(extracted)) {
-        console.log('PDF text extraction was insufficient; running OCR fallback on PDF pages.');
         for (const pageIndex of [0, 1]) {
           try {
-            const pageText = await ocrPdfPage(imagePath, pageIndex);
+            const pageText = await ocrPdfPage(imageInput, pageIndex);
             if (!pageText.trim()) continue;
             const pageExtracted = extractFromText(pageText);
             extracted = mergeMissingFields(extracted, pageExtracted);
@@ -221,20 +229,17 @@ async function extractPaymentDetails(imagePath) {
         }
       }
     } else {
-      // Preprocess image for better OCR accuracy
-      const processedPath = imagePath + '.processed.jpg';
+      // Image processing using sharp (works with both path and buffer)
+      const processedPath = path.join(process.cwd(), `temp-ocr-${Date.now()}-${Math.floor(Math.random()*1000)}.processed.jpg`);
       try {
-        await sharp(imagePath)
+        await sharp(imageInput)
           .greyscale()
           .normalize()
           .sharpen()
           .jpeg({ quality: 90 })
           .toFile(processedPath);
 
-        // Perform OCR
-        const ocrResult = await Tesseract.recognize(processedPath, 'eng', {
-          logger: m => console.log(m)
-        });
+        const ocrResult = await Tesseract.recognize(processedPath, 'eng');
         text = ocrResult.data?.text || '';
         extracted = extractFromText(text);
       } finally {
@@ -242,12 +247,13 @@ async function extractPaymentDetails(imagePath) {
       }
     }
 
-    console.log('OCR Text:', text);
-
-    console.log('Extracted payment details:', extracted);
+    console.log('Final Extracted OCR details:', extracted);
     return extracted;
-
   } catch (error) {
+    console.error('OCR Processing Error:', error.message);
+    return emptyExtracted();
+  }
+}
     console.error('OCR extraction error:', error);
     return {
       ...emptyExtracted(),

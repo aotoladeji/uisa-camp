@@ -242,7 +242,7 @@ router.post('/',
           for (const task of fileTasks) {
             const file = files[task.field]?.[0];
             if (file) {
-              const fileData = file.path || file.buffer;
+              const fileData = file.buffer || file.path;
               if (fileData) {
                 const publicId = `${task.prefix}_${cleanForm}_${studentName}`;
                 const secureUrl = await cloudinary.uploadToCloudinary(fileData, `uisa/applicants/${task.folder}`, publicId);
@@ -679,7 +679,7 @@ router.patch('/:id',
             for (const task of docTasks) {
               const file = files[task.field]?.[0];
               if (file) {
-                const fileData = file.path || file.buffer;
+                const fileData = file.buffer || file.path;
                 if (fileData) {
                   const publicId = `${task.prefix}_${cleanForm}_${studentName}_${Date.now()}`;
                   const secureUrl = await cloudinary.uploadToCloudinary(fileData, `uisa/applicants/${task.folder}`, publicId);
@@ -693,7 +693,7 @@ router.patch('/:id',
             // 2. Handle Receipt Upload & OCR
             const receiptFile = files.receipt?.[0];
             if (receiptFile) {
-              const fileData = receiptFile.path || receiptFile.buffer;
+              const fileData = receiptFile.buffer || receiptFile.path;
               if (fileData) {
                 const publicId = `Receipt_${cleanForm}_${studentName}_${Date.now()}`;
                 const secureUrl = await cloudinary.uploadToCloudinary(fileData, 'uisa/receipts', publicId);
@@ -712,7 +712,7 @@ router.patch('/:id',
                     );
                   }
 
-                  // Run OCR on the receipt
+                  // Run OCR on the receipt - use buffer
                   const extracted = await extractPaymentDetails(fileData);
                   if (extracted) {
                     const [latestP] = await pool.query("SELECT id, transaction_ref, receipt_transaction_ref, amount_paid, receipt_amount, payment_date FROM payments WHERE applicant_id = ? ORDER BY id DESC LIMIT 1", [req.params.id]);
@@ -823,7 +823,7 @@ router.patch('/:id/documents',
         for (const task of tasks) {
           const file = files[task.field]?.[0];
           if (file) {
-            const fileData = file.path || file.buffer;
+            const fileData = file.buffer || file.path;
             if (fileData) {
               const publicId = `${task.prefix}_${cleanForm}_${studentName}_${Date.now()}`;
               const secureUrl = await cloudinary.uploadToCloudinary(fileData, `uisa/applicants/${task.folder}`, publicId);

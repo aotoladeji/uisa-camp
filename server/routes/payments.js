@@ -77,15 +77,16 @@ router.post('/submit',
       // Check for existing payment
       const [existing] = await pool.query('SELECT id FROM payments WHERE applicant_id = ?', [applicant_id]);
       if (existing.length) {
-        // Update existing
+        // Update existing - DO NOT overwrite receipt_path with null here.
+        // The background task will update it once the Cloudinary upload completes.
         await pool.query(`
           UPDATE payments SET
             amount_paid = ?, fee_type = ?, discount_pct = ?, gross_amount = ?,
-            transaction_ref = ?, payment_date = ?, receipt_path = ?,
+            transaction_ref = ?, payment_date = ?,
             verification_status = 'Pending', updated_at = CURRENT_TIMESTAMP
           WHERE applicant_id = ?`,
           [submittedAmount, selectedPlan, discount, gross,
-           submittedRef, submittedDate, receiptPath, applicant_id]
+           submittedRef, submittedDate, applicant_id]
         );
       } else {
         await pool.query(`
@@ -94,7 +95,7 @@ router.post('/submit',
              transaction_ref, payment_date, receipt_path, bank_name, account_number)
           VALUES (?,?,?,?,?,?,?,?,?,?)`,
           [applicant_id, submittedAmount, selectedPlan,
-           discount, gross, submittedRef, submittedDate, receiptPath,
+           discount, gross, submittedRef, submittedDate, null,
            'Access Bank', null]
         );
       }
@@ -127,7 +128,8 @@ router.post('/submit',
           const cleanForm = (appl.form_number || applicant_id).toString().replace(/\//g, '_');
           
           if (req.file) {
-            const fileData = req.file.path || req.file.buffer;
+            // Prioritize buffer for memory storage to avoid "memory:" path strings
+            const fileData = req.file.buffer || req.file.path;
             if (fileData) {
               const publicId = `Receipt_${cleanForm}_${studentName}_${Date.now()}`;
               const secureUrl = await cloudinary.uploadToCloudinary(fileData, 'uisa/receipts', publicId);
@@ -141,9 +143,8 @@ router.post('/submit',
             }
           }
 
-          // Note: extracted OCR details might still be useful even if Cloudinary fails,
-          // but we use the buffer if file.path is missing.
-          const extracted = await extractPaymentDetails(req.file.path || req.file.buffer);
+          // extracted OCR details - use buffer if available
+          const extracted = await extractPaymentDetails(req.file.buffer || req.file.path);
 
           const [paymentRows] = await pool.query(
             `SELECT id, transaction_ref, receipt_transaction_ref, amount_paid, receipt_amount,
@@ -179,6 +180,9 @@ router.post('/submit',
             );
           }
         } catch (bgErr) {
+          console.warn('Background payment post-processing failed:', bgErr.message);
+        }
+      });
           console.warn('Background payment post-processing failed:', bgErr.message);
         }
       });
