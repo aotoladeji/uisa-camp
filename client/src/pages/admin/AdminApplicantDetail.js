@@ -50,6 +50,31 @@ const Bool = ({ val }) => {
     : <span style={{ color: 'var(--text-3)' }}>No</span>;
 };
 
+const serverUrl = process.env.REACT_APP_SERVER_URL || 'http://localhost:5000';
+
+const FileRow = ({ label, field, current, editing, onFile }) => (
+  <div style={{ display: 'flex', gap: 16, padding: '7px 0', borderBottom: '1px solid var(--surface-2)', alignItems: 'center' }}>
+    <span style={{ color: 'var(--text-3)', fontSize: 13, width: 180, flexShrink: 0 }}>{label}</span>
+    {editing ? (
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10 }}>
+        <input type="file" onChange={e => onFile(field, e.target.files[0])} style={{ fontSize: 12 }} />
+        {current && <span style={{ fontSize: 11, color: 'var(--green)' }}>(Existing file will be kept if none uploaded)</span>}
+      </div>
+    ) : (
+      <div style={{ flex: 1 }}>
+        {current ? (
+          <a href={current.startsWith('http') ? current : `${serverUrl}/${current}`} target="_blank" rel="noreferrer" 
+            style={{ fontSize: 13, color: 'var(--primary)', fontWeight: 500 }}>
+            View Current File <ExternalLink size={12} style={{ verticalAlign: 'middle', marginLeft: 4 }} />
+          </a>
+        ) : (
+          <span style={{ color: 'var(--text-3)', fontSize: 13 }}>Not uploaded</span>
+        )}
+      </div>
+    )}
+  </div>
+);
+
 export default function AdminApplicantDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -69,6 +94,12 @@ export default function AdminApplicantDetail() {
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({});
+  const [files, setFiles] = useState({
+    passport_photo: null,
+    birth_certificate: null,
+    school_result: null,
+    receipt: null
+  });
 
   const fetch = async () => {
     setLoading(true);
@@ -95,9 +126,23 @@ export default function AdminApplicantDetail() {
   const handleEditSave = async () => {
     setSaving(true);
     try {
-      await api.patch(`/applicants/${id}`, editForm);
+      const fd = new FormData();
+      Object.keys(editForm).forEach(k => {
+        if (editForm[k] !== null && editForm[k] !== undefined) {
+          fd.append(k, editForm[k]);
+        }
+      });
+      if (files.passport_photo)    fd.append('passport_photo',    files.passport_photo);
+      if (files.birth_certificate) fd.append('birth_certificate', files.birth_certificate);
+      if (files.school_result)     fd.append('school_result',     files.school_result);
+      if (files.receipt)           fd.append('receipt',           files.receipt);
+
+      await api.patch(`/applicants/${id}`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
       toast.success('Applicant details updated');
       setIsEditing(false);
+      setFiles({ passport_photo: null, birth_certificate: null, school_result: null, receipt: null });
       fetch();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Update failed');
@@ -137,7 +182,6 @@ export default function AdminApplicantDetail() {
   if (!appl) return <div style={{ padding: 48, textAlign: 'center', color: 'var(--red)' }}>Applicant not found</div>;
 
   const fullName = `${appl.first_name} ${appl.middle_name || ''} ${appl.surname}`.trim();
-  const serverUrl = process.env.REACT_APP_SERVER_URL || 'http://localhost:5000';
 
   return (
     <div className="page-enter">
@@ -501,21 +545,10 @@ export default function AdminApplicantDetail() {
           {/* Documents */}
           <div className="card" style={{ padding: '18px 20px', marginBottom: 16 }}>
             <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--navy)', marginBottom: 14, textTransform: 'uppercase', letterSpacing: '.5px' }}>Documents</div>
-            {[
-              ['Passport Photo', appl.passport_photo],
-              ['Birth Certificate', appl.birth_certificate],
-              ['School Result', appl.school_result],
-            ].map(([k, p]) => (
-              <div key={k} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: '1px solid var(--surface-2)', fontSize: 13 }}>
-                <span style={{ color: 'var(--text-2)' }}>{k}</span>
-                {p
-                  ? <a href={p.startsWith('http') ? p : `${serverUrl}/${p}`} target="_blank" rel="noreferrer" className="btn btn-ghost btn-sm" style={{ padding: '3px 8px', fontSize: 12 }}>
-                      <ExternalLink size={11} /> View
-                    </a>
-                  : <span style={{ color: 'var(--text-3)', fontSize: 12 }}>Not uploaded</span>
-                }
-              </div>
-            ))}
+            <FileRow label="Passport Photo" field="passport_photo" current={appl.passport_photo} editing={isEditing} onFile={(f,v) => setFiles(p => ({...p,[f]:v}))} />
+            <FileRow label="Birth Certificate" field="birth_certificate" current={appl.birth_certificate} editing={isEditing} onFile={(f,v) => setFiles(p => ({...p,[f]:v}))} />
+            <FileRow label="School Result" field="school_result" current={appl.school_result} editing={isEditing} onFile={(f,v) => setFiles(p => ({...p,[f]:v}))} />
+            <FileRow label="Payment Receipt" field="receipt" current={appl.receipt_path} editing={isEditing} onFile={(f,v) => setFiles(p => ({...p,[f]:v}))} />
           </div>
 
           {/* Communication */}

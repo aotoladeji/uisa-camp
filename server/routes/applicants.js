@@ -6,6 +6,7 @@ const pool    = require('../db/pool');
 const upload  = require('../middleware/upload');
 const { authenticate, requireRole } = require('../middleware/auth');
 const { sendEmail } = require('../middleware/email');
+const { extractPaymentDetails } = require('../middleware/ocr');
 const { getPricingConfig } = require('../utils/pricing');
 const cloudinary = require('../utils/cloudinary');
 
@@ -595,61 +596,159 @@ router.get('/:id', authenticate, async (req, res) => {
 });
 
 // ─── PATCH /api/applicants/:id  (admin: update applicant info) ───────────────
-router.patch('/:id', authenticate, requireRole('admin', 'super_admin'), async (req, res) => {
-  const fields = [
-    'surname', 'first_name', 'middle_name', 'date_of_birth', 'gender',
-    'nationality', 'state_of_origin', 'lga', 'school', 'class_level',
-    'home_address', 'city', 'state', 'age', 'age_category',
-    'sport_selection', 'experience_level', 'tshirt_size',
-    'guardian_name', 'guardian_phone', 'guardian_email', 'guardian_whatsapp',
-    'blood_group', 'genotype', 'allergies', 'current_medications',
-    'group_assigned', 'room_number', 'coach_assigned',
-    'is_payment_verified', 'is_medical_cleared', 'is_admitted', 'status'
-  ];
+router.patch('/:id',
+  authenticate,
+  requireRole('admin', 'super_admin'),
+  upload.fields([
+    { name: 'passport_photo',    maxCount: 1 },
+    { name: 'birth_certificate', maxCount: 1 },
+    { name: 'school_result',     maxCount: 1 },
+    { name: 'receipt',           maxCount: 1 },
+  ]),
+  async (req, res) => {
+    const fields = [
+      'surname', 'first_name', 'middle_name', 'date_of_birth', 'gender',
+      'nationality', 'state_of_origin', 'lga', 'school', 'class_level',
+      'home_address', 'city', 'state', 'age', 'age_category',
+      'sport_selection', 'experience_level', 'tshirt_size',
+      'guardian_name', 'guardian_phone', 'guardian_email', 'guardian_whatsapp',
+      'blood_group', 'genotype', 'allergies', 'current_medications',
+      'group_assigned', 'room_number', 'coach_assigned',
+      'is_payment_verified', 'is_medical_cleared', 'is_admitted', 'status'
+    ];
 
-  const updates = [];
-  const params = [];
+    const updates = [];
+    const params = [];
+    const files = req.files || {};
 
-  fields.forEach(f => {
-    if (req.body[f] !== undefined) {
-      updates.push(`${f} = ?`);
-      params.push(req.body[f]);
+    fields.forEach(f => {
+      if (req.body[f] !== undefined) {
+        updates.push(`${f} = ?`);
+        params.push(req.body[f]);
+      }
+    });
+
+    // Automatically recalculate age and category if DOB changes
+    if (req.body.date_of_birth) {
+      const dob = new Date(req.body.date_of_birth);
+      if (!isNaN(dob.getTime())) {
+        const age = new Date().getFullYear() - dob.getFullYear();
+        const category = age <= 17 ? 'Junior (6-17)' : 'Elite (18-23)';
+        
+        if (!req.body.age) {
+          updates.push(`age = ?`);
+          params.push(age);
+        }
+        if (!req.body.age_category) {
+          updates.push(`age_category = ?`);
+          params.push(category);
+        }
+      }
+    }
+
+    if (updates.length === 0 && Object.keys(files).length === 0) {
+      return res.status(400).json({ error: 'No fields or files to update' });
+    }
+
+    try {
+      if (updates.length > 0) {
+        params.push(req.params.id);
+        await pool.query(
+          `UPDATE applicants SET ${updates.join(', ')} WHERE id = ?`,
+          params
+        );
+      }
+
+      // Handle file uploads in background
+      if (Object.keys(files).length > 0) {
+        const [rows] = await pool.query("SELECT first_name, surname, form_number FROM applicants WHERE id = ?", [req.params.id]);
+        const appl = rows[0] || {};
+        
+        setImmediate(async () => {
+          try {
+            const studentName = `${appl.surname || 'Manual'}_${appl.first_name || 'Student'}`.replace(/\s+/g, '_');
+            const cleanForm = (appl.form_number || req.params.id).toString().replace(/\//g, '_');
+
+            // 1. Handle Applicant Documents (Passport, BirthCert, Result)
+            const docTasks = [
+              { field: 'passport_photo',    folder: 'photos',    prefix: 'Passport' },
+              { field: 'birth_certificate',  folder: 'documents', prefix: 'BirthCert' },
+              { field: 'school_result',     folder: 'documents', prefix: 'Result' }
+            ];
+
+            for (const task of docTasks) {
+              const file = files[task.field]?.[0];
+              if (file) {
+                const fileData = file.path || file.buffer;
+                if (fileData) {
+                  const publicId = `${task.prefix}_${cleanForm}_${studentName}_${Date.now()}`;
+                  const secureUrl = await cloudinary.uploadToCloudinary(fileData, `uisa/applicants/${task.folder}`, publicId);
+                  if (secureUrl) {
+                    await pool.query(`UPDATE applicants SET ${task.field} = ? WHERE id = ?`, [secureUrl, req.params.id]);
+                  }
+                }
+              }
+            }
+
+            // 2. Handle Receipt Upload & OCR
+            const receiptFile = files.receipt?.[0];
+            if (receiptFile) {
+              const fileData = receiptFile.path || receiptFile.buffer;
+              if (fileData) {
+                const publicId = `Receipt_${cleanForm}_${studentName}_${Date.now()}`;
+                const secureUrl = await cloudinary.uploadToCloudinary(fileData, 'uisa/receipts', publicId);
+                
+                if (secureUrl) {
+                  // Find existing payment or create one
+                  const [pRows] = await pool.query("SELECT id FROM payments WHERE applicant_id = ? ORDER BY id DESC LIMIT 1", [req.params.id]);
+                  
+                  if (pRows.length) {
+                    await pool.query("UPDATE payments SET receipt_path = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", [secureUrl, pRows[0].id]);
+                  } else {
+                    // Create minimal entry if none exists
+                    await pool.query(
+                      "INSERT INTO payments (applicant_id, amount_paid, fee_type, receipt_path) VALUES (?, ?, ?, ?)",
+                      [req.params.id, 0, 'Regular', secureUrl]
+                    );
+                  }
+
+                  // Run OCR on the receipt
+                  const extracted = await extractPaymentDetails(fileData);
+                  if (extracted) {
+                    const [latestP] = await pool.query("SELECT id, transaction_ref, receipt_transaction_ref, amount_paid, receipt_amount, payment_date FROM payments WHERE applicant_id = ? ORDER BY id DESC LIMIT 1", [req.params.id]);
+                    if (latestP.length) {
+                      const p = latestP[0];
+                      await pool.query(
+                        `UPDATE payments SET 
+                          transaction_ref = ?, receipt_transaction_ref = ?, 
+                          receipt_amount = ?, payment_date = ?, 
+                          ocr_extracted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                         WHERE id = ?`,
+                        [
+                          p.transaction_ref || extracted.transaction_ref || null,
+                          p.receipt_transaction_ref || extracted.transaction_ref || null,
+                          p.receipt_amount || extracted.amount_paid || null,
+                          p.payment_date || extracted.payment_date || null,
+                          p.id
+                        ]
+                      );
+                    }
+                  }
+                }
+              }
+            }
+          } catch (bgErr) {
+            console.warn('Admin edit background upload failed:', bgErr.message);
+          }
+        });
+      }
+
+      res.json({ success: true, message: 'Applicant update initiated' });
+    } catch (err) {
+      console.error('Update applicant error:', err);
+      res.status(500).json({ error: 'Failed to update applicant information' });
     }
   });
-
-  // Automatically recalculate age and category if DOB changes
-  if (req.body.date_of_birth) {
-    const dob = new Date(req.body.date_of_birth);
-    if (!isNaN(dob.getTime())) {
-      const age = new Date().getFullYear() - dob.getFullYear();
-      const category = age <= 17 ? 'Junior (6-17)' : 'Elite (18-23)';
-      
-      if (!req.body.age) {
-        updates.push(`age = ?`);
-        params.push(age);
-      }
-      if (!req.body.age_category) {
-        updates.push(`age_category = ?`);
-        params.push(category);
-      }
-    }
-  }
-
-  if (updates.length === 0) return res.status(400).json({ error: 'No fields to update' });
-
-  params.push(req.params.id);
-
-  try {
-    await pool.query(
-      `UPDATE applicants SET ${updates.join(', ')} WHERE id = ?`,
-      params
-    );
-    res.json({ success: true });
-  } catch (err) {
-    console.error('Update applicant error:', err);
-    res.status(500).json({ error: 'Failed to update applicant information' });
-  }
-});
 
 // ─── PATCH /api/applicants/:id/documents  (public: reupload passport/docs) ───
 // Authenticated by form_number + guardian_email — no admin token needed.
@@ -685,18 +784,14 @@ router.patch('/:id/documents',
     const getFilePath = (fieldName, existing) => {
       const uploaded = files[fieldName]?.[0];
       if (!uploaded) return existing; // keep existing if nothing new uploaded
-      return uploaded.path || (IS_VERCEL ? `memory:${uploaded.originalname}:${Date.now()}` : null);
+      return uploaded.path || null; // Return null (briefly) while background upload happens
     };
 
     const newPassport    = getFilePath('passport_photo',    appl.passport_photo);
     const newBirth       = getFilePath('birth_certificate', appl.birth_certificate);
     const newSchool      = getFilePath('school_result',     appl.school_result);
 
-    // Delete old file from disk if being replaced (non-Vercel only)
-    if (!IS_VERCEL && files.passport_photo?.[0]    && appl.passport_photo    && !appl.passport_photo.startsWith('memory:'))    safeDeleteFile(appl.passport_photo);
-    if (!IS_VERCEL && files.birth_certificate?.[0] && appl.birth_certificate && !appl.birth_certificate.startsWith('memory:')) safeDeleteFile(appl.birth_certificate);
-    if (!IS_VERCEL && files.school_result?.[0]     && appl.school_result     && !appl.school_result.startsWith('memory:'))     safeDeleteFile(appl.school_result);
-
+    // Skip local deletion as we use Cloudinary
     await pool.query(
       `UPDATE applicants
        SET passport_photo = ?, birth_certificate = ?, school_result = ?
@@ -716,12 +811,13 @@ router.patch('/:id/documents',
     // Background upload to Cloudinary
     setImmediate(async () => {
       try {
-        const studentName = `${appl.first_name || 'Student'}_${appl.surname || 'Manual'}`.replace(/\s+/g, '_');
-        
+        const studentName = `${appl.surname || 'Manual'}_${appl.first_name || 'Student'}`.replace(/\s+/g, '_');
+        const cleanForm = (appl.form_number || req.params.id).toString().replace(/\//g, '_');
+
         const tasks = [
-          { field: 'passport_photo',    folder: 'photos' },
-          { field: 'birth_certificate',  folder: 'documents' },
-          { field: 'school_result',     folder: 'documents' }
+          { field: 'passport_photo',    folder: 'photos',    prefix: 'Passport' },
+          { field: 'birth_certificate',  folder: 'documents', prefix: 'BirthCert' },
+          { field: 'school_result',     folder: 'documents', prefix: 'Result' }
         ];
 
         for (const task of tasks) {
@@ -729,7 +825,7 @@ router.patch('/:id/documents',
           if (file) {
             const fileData = file.path || file.buffer;
             if (fileData) {
-              const publicId = `${task.field}_${studentName}_${req.params.id}_${Date.now()}`;
+              const publicId = `${task.prefix}_${cleanForm}_${studentName}_${Date.now()}`;
               const secureUrl = await cloudinary.uploadToCloudinary(fileData, `uisa/applicants/${task.folder}`, publicId);
               
               if (secureUrl) {

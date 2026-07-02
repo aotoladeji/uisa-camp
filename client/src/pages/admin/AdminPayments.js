@@ -202,7 +202,7 @@ export default function AdminPayments() {
                     </td>
                     <td>
                       {row.receipt_path
-                        ? <a href={`${serverUrl}/${row.receipt_path}`} target="_blank" rel="noreferrer" className="btn btn-ghost btn-sm" title="View Receipt">
+                        ? <a href={row.receipt_path.startsWith('http') ? row.receipt_path : `${serverUrl}/${row.receipt_path}`} target="_blank" rel="noreferrer" className="btn btn-ghost btn-sm" title="View Receipt">
                             <ExternalLink size={13} />
                           </a>
                         : <span style={{ color: 'var(--text-3)', fontSize: 12 }}>—</span>
@@ -265,12 +265,12 @@ export default function AdminPayments() {
             {/* Show receipt inline */}
             {selected.receipt_path && (
               <div style={{ marginBottom: 16 }}>
-                <a href={`${serverUrl}/${selected.receipt_path}`} target="_blank" rel="noreferrer"
+                <a href={selected.receipt_path.startsWith('http') ? selected.receipt_path : `${serverUrl}/${selected.receipt_path}`} target="_blank" rel="noreferrer"
                   className="btn btn-outline btn-sm" style={{ width: '100%', justifyContent: 'center', marginBottom: 10 }}>
                   <ExternalLink size={13} /> Open Full Receipt
                 </a>
                 {selected.receipt_path.match(/\.(jpg|jpeg|png|webp)$/i) && (
-                  <img src={`${serverUrl}/${selected.receipt_path}`} alt="receipt"
+                  <img src={selected.receipt_path.startsWith('http') ? selected.receipt_path : `${serverUrl}/${selected.receipt_path}`} alt="receipt"
                     style={{ width: '100%', maxHeight: 200, objectFit: 'contain', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}
                   />
                 )}

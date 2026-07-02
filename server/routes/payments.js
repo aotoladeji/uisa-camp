@@ -120,7 +120,10 @@ router.post('/submit',
       // Process OCR and Cloudinary upload after responding
       setImmediate(async () => {
         try {
-          const studentName = (appl.full_name || 'Student').replace(/\s+/g, '_');
+          // Re-fetch to get correct name parts if full_name is not ideal
+          const [details] = await pool.query("SELECT first_name, surname FROM applicants WHERE id = ?", [applicant_id]);
+          const d = details[0] || {};
+          const studentName = `${d.surname || 'Manual'}_${d.first_name || 'Student'}`.replace(/\s+/g, '_');
           const cleanForm = (appl.form_number || applicant_id).toString().replace(/\//g, '_');
           
           if (req.file) {
@@ -132,7 +135,7 @@ router.post('/submit',
               if (secureUrl) {
                 await pool.query(
                   "UPDATE payments SET receipt_path = ? WHERE applicant_id = ?",
-                  [secureUrl, applicantId]
+                  [secureUrl, applicant_id]
                 );
               }
             }
