@@ -66,8 +66,18 @@ if (process.env.DATABASE_URL) {
       const res = await client.execute({ sql, args: params });
       const sqlText = sql.replace(/\/\*[\s\S]*?\*\/|--.*$/gm, '').trim();
       const upper = sqlText.toUpperCase();
+      
       if (upper.startsWith('SELECT') || upper.startsWith('PRAGMA') || upper.startsWith('WITH') || (res.rows && res.rows.length > 0)) {
-        return [res.rows];
+        // Normalize column names to lowercase to prevent issues with LibSQL/Turso case-sensitivity
+        const normalizedRows = (res.rows || []).map(row => {
+          if (typeof row !== 'object' || row === null) return row;
+          const normalized = {};
+          for (const key of Object.keys(row)) {
+            normalized[key.toLowerCase()] = row[key];
+          }
+          return normalized;
+        });
+        return [normalizedRows];
       }
       return [{ insertId: Number(res.lastInsertRowid ?? 0), affectedRows: res.rowsAffected ?? 0 }];
     },
@@ -128,7 +138,20 @@ if (process.env.DATABASE_URL) {
         const upper = sqlText.toUpperCase();
         if (upper.startsWith('SELECT') || upper.startsWith('PRAGMA') || upper.startsWith('WITH')) {
           this.db.all(sql, params, (err, rows) => {
-            if (err) reject(err); else resolve([rows || []]);
+            if (err) {
+              reject(err);
+            } else {
+              // Normalize column names to lowercase
+              const normalizedRows = (rows || []).map(row => {
+                if (typeof row !== 'object' || row === null) return row;
+                const normalized = {};
+                for (const key of Object.keys(row)) {
+                  normalized[key.toLowerCase()] = row[key];
+                }
+                return normalized;
+              });
+              resolve([normalizedRows]);
+            }
           });
         } else {
           this.db.run(sql, params, function (err) {

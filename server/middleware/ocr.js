@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 
 // Native modules (sharp, tesseract.js) are not available on Vercel serverless —
 // load them lazily and fall back gracefully if they fail to load.
@@ -156,7 +157,7 @@ function mergeMissingFields(primary, secondary) {
 }
 
 async function ocrPdfPage(imageOrPath, pageIndex) {
-  const pageImagePath = path.join(process.cwd(), `temp-ocr-${Date.now()}-${pageIndex + 1}.jpg`);
+  const pageImagePath = path.join(os.tmpdir(), `temp-ocr-${Date.now()}-${pageIndex + 1}.jpg`);
   try {
     const input = Buffer.isBuffer(imageOrPath) ? imageOrPath : imageOrPath;
     await sharp(input, { density: 300, page: pageIndex })
@@ -230,7 +231,7 @@ async function extractPaymentDetails(imageInput) {
       }
     } else {
       // Image processing using sharp (works with both path and buffer)
-      const processedPath = path.join(process.cwd(), `temp-ocr-${Date.now()}-${Math.floor(Math.random()*1000)}.processed.jpg`);
+      const processedPath = path.join(os.tmpdir(), `temp-ocr-${Date.now()}-${Math.floor(Math.random()*1000)}.processed.jpg`);
       try {
         await sharp(imageInput)
           .greyscale()

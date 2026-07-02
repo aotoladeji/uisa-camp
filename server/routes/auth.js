@@ -59,11 +59,16 @@ router.get('/me', authenticate, (req, res) => {
 
 // ── GET /api/auth/settings/auto-accept-mode ────────────────────────────────
 router.get('/settings/auto-accept-mode', authenticate, async (_req, res) => {
-  const [rows] = await pool.query(
-    "SELECT setting_value FROM app_settings WHERE setting_key = 'auto_accept_mode' LIMIT 1"
-  );
-  const mode = rows[0]?.setting_value || 'balanced';
-  res.json({ mode });
+  try {
+    const [rows] = await pool.query(
+      "SELECT setting_value FROM app_settings WHERE setting_key = 'auto_accept_mode' LIMIT 1"
+    );
+    const mode = rows[0]?.setting_value || 'balanced';
+    res.json({ mode });
+  } catch (err) {
+    console.error('Settings error:', err);
+    res.status(500).json({ error: 'Failed to get settings' });
+  }
 });
 
 // ── PATCH /api/auth/settings/auto-accept-mode ──────────────────────────────
