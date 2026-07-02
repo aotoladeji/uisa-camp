@@ -513,8 +513,7 @@ router.post('/bulk-delete', authenticate, requireRole('admin','super_admin'), as
 // IMPORTANT: must be defined BEFORE /:id route or Express will match 'stats' as an id
 router.get('/stats/summary', authenticate, async (req, res) => {
   try {
-    const [countsRows] = await pool.query(`
-      SELECT
+    const [countsRows] = await pool.query(`SELECT
         COUNT(*) AS total,
         SUM(CASE WHEN LOWER(TRIM(status)) = 'pending' THEN 1 ELSE 0 END) AS pending,
         SUM(CASE WHEN LOWER(TRIM(status)) = 'payment submitted' THEN 1 ELSE 0 END) AS payment_submitted,
@@ -532,22 +531,28 @@ router.get('/stats/summary', authenticate, async (req, res) => {
       normalizedCounts[key.toLowerCase()] = countsResult[key];
     });
     
-    const [sportBreakdown] = await pool.query(`
-      SELECT sport_selection, COUNT(*) AS count FROM applicants GROUP BY sport_selection`
-    );
-    const [categoryBreakdown] = await pool.query(`
-      SELECT age_category, COUNT(*) AS count
+    const [sportBreakdownRaw] = await pool.query(`SELECT sport_selection, COUNT(*) AS count FROM applicants GROUP BY sport_selection`);
+    const sportBreakdown = (sportBreakdownRaw || []).map(row => {
+      const normalized = {};
+      Object.keys(row).forEach(key => normalized[key.toLowerCase()] = row[key]);
+      return normalized;
+    });
+
+    const [categoryBreakdownRaw] = await pool.query(`SELECT age_category, COUNT(*) AS count
       FROM applicants
       WHERE age_category IS NOT NULL AND age_category != ''
-      GROUP BY age_category`
-    );
-    const [revRows] = await pool.query(`
-      SELECT 
+      GROUP BY age_category`);
+    const categoryBreakdown = (categoryBreakdownRaw || []).map(row => {
+      const normalized = {};
+      Object.keys(row).forEach(key => normalized[key.toLowerCase()] = row[key]);
+      return normalized;
+    });
+
+    const [revRows] = await pool.query(`SELECT 
         SUM(amount_paid) AS total_revenue,
         COUNT(*) AS total_payments
       FROM payments 
-      WHERE verification_status = 'Verified' OR verification_status = 'verified'`
-    );
+      WHERE verification_status = 'Verified' OR verification_status = 'verified'`);
     
     // Normalize revenue keys
     const revResult = revRows && revRows.length > 0 ? revRows[0] : {};
