@@ -15,6 +15,12 @@ coverage/
 server/.env
 client/.env
 
+# Database files
+server/db/*.db
+server/db/*.db-shm
+server/db/*.db-wal
+db/
+
 # Runtime data and uploads
 server/uploads/documents/*
 server/uploads/photos/*
