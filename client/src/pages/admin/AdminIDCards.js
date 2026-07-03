@@ -230,12 +230,23 @@ export default function AdminIDCards() {
 
                 <div className="id-card-photo-wrap">
                   {card.passport_photo ? (
-                    <img src={toPhotoUrl(card.passport_photo)} alt={card.full_name} className="id-card-photo" crossOrigin="anonymous" />
-                  ) : (
-                    <div className="id-card-photo id-card-photo-fallback">
-                      {(card.first_name?.[0] || '') + (card.surname?.[0] || '')}
-                    </div>
-                  )}
+                    <img
+                      src={toPhotoUrl(card.passport_photo)}
+                      alt={card.full_name}
+                      className="id-card-photo"
+                      crossOrigin="anonymous"
+                      onError={e => {
+                        e.currentTarget.style.display = 'none';
+                        e.currentTarget.nextSibling.style.display = 'flex';
+                      }}
+                    />
+                  ) : null}
+                  <div
+                    className="id-card-photo id-card-photo-fallback"
+                    style={{ display: card.passport_photo ? 'none' : 'flex' }}
+                  >
+                    {(card.first_name?.[0] || '') + (card.surname?.[0] || '')}
+                  </div>
                 </div>
 
                 <div className="id-card-body">

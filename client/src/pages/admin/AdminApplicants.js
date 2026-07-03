@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Search, Eye, ChevronLeft, ChevronRight, Trash2, Download, ShieldCheck, Activity, CheckCircle } from 'lucide-react';
+import { Search, Eye, ChevronLeft, ChevronRight, Trash2, Download, ShieldCheck, Activity, CheckCircle, ImageIcon, Receipt } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
@@ -247,6 +247,22 @@ export default function AdminApplicants() {
                     <td style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text-3)' }}>{row.form_number}</td>
                     <td>
                       <div style={{ fontWeight: 600, color: 'var(--text-1)', fontSize: 14 }}>{row.first_name} {row.surname}</div>
+                      <div style={{ display: 'flex', gap: 6, marginTop: 3 }}>
+                        {row.has_photo ? (
+                          <span title="Passport photo uploaded" style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: 10, fontWeight: 600, color: 'var(--green)', background: 'var(--green-bg)', padding: '1px 5px', borderRadius: 8 }}>
+                            <ImageIcon size={9} /> Photo
+                          </span>
+                        ) : (
+                          <span title="No passport photo" style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: 10, color: 'var(--text-3)' }}>
+                            <ImageIcon size={9} /> No photo
+                          </span>
+                        )}
+                        {row.has_receipt ? (
+                          <span title="Receipt uploaded" style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: 10, fontWeight: 600, color: 'var(--blue)', background: '#dbeafe', padding: '1px 5px', borderRadius: 8 }}>
+                            <Receipt size={9} /> Receipt
+                          </span>
+                        ) : null}
+                      </div>
                     </td>
                     <td style={{ fontSize: 13, color: 'var(--text-2)' }}>{row.gender}</td>
                     <td style={{ fontSize: 13, color: 'var(--text-2)' }}>{row.age}</td>

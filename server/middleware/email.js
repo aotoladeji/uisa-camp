@@ -1,5 +1,18 @@
 const nodemailer = require('nodemailer');
+const crypto = require('crypto');
 const pool = require('../db/pool');
+
+// Build a signed URL to the printable admission letter page.
+// The HMAC prevents link tampering; no expiry is needed since letters are permanent.
+const buildLetterUrl = (formNumber) => {
+  // SERVER_URL = API base (e.g. http://localhost:5000 locally, https://uisa-camp.vercel.app in prod)
+  // Falls back to CLIENT_URL for single-domain deployments (Vercel) where both are the same.
+  const base = (process.env.SERVER_URL || process.env.CLIENT_URL || 'http://localhost:5000').replace(/\/$/, '');
+  const sig  = crypto.createHmac('sha256', process.env.JWT_SECRET || 'uisa_dev_secret')
+                     .update(formNumber)
+                     .digest('hex');
+  return `${base}/api/applicants/letter?form=${encodeURIComponent(formNumber)}&sig=${sig}`;
+};
 
 const transporter = nodemailer.createTransport({
   host:   process.env.SMTP_HOST || 'smtp.gmail.com',
@@ -126,7 +139,7 @@ const templates = {
     .sign { margin-top: 36px; border-top: 1px solid #d1d5db; padding-top: 10px; font-family: Arial, sans-serif; font-size: 14px; color: #374151; }
     .footer { padding: 16px 36px; text-align: center; color: #9ca3af; font-family: Arial, sans-serif; font-size: 12px; background: #f9fafb; border-top: 1px solid #e5e7eb; }
     .print-btn-wrap { text-align: center; margin: 28px 0 8px; }
-    .print-btn { display: inline-block; background: #0A3D62; color: #fff; font-family: Arial, sans-serif; font-weight: 700; font-size: 14px; padding: 12px 32px; border-radius: 6px; border: none; cursor: pointer; letter-spacing: .3px; }
+      .print-btn { display: inline-block; background: #0A3D62; color: #fff; font-family: Arial, sans-serif; font-weight: 700; font-size: 14px; padding: 12px 32px; border-radius: 6px; text-decoration: none; cursor: pointer; letter-spacing: .3px; }
     .print-btn:hover { background: #0c4e7a; }
     @media print {
       body { background: #fff; }
@@ -183,7 +196,7 @@ const templates = {
       <div class="sign">Camp Director</div>
 
       <div class="print-btn-wrap">
-        <button class="print-btn" onclick="window.print()">⬇ Save / Print as PDF</button>
+        <a href="${buildLetterUrl(data.form_number)}" class="print-btn">⬇ Save / Print as PDF</a>
       </div>
     </div>
     <div class="footer">

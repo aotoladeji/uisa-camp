@@ -1,5 +1,6 @@
 const express = require('express');
 const { body, query, validationResult } = require('express-validator');
+const crypto  = require('crypto');
 const fs      = require('fs');
 const path    = require('path');
 const pool    = require('../db/pool');
@@ -398,6 +399,8 @@ router.get('/', authenticate, async (req, res) => {
            a.is_medical_cleared, a.is_admitted, a.is_payment_verified,
            a.guardian_name, a.guardian_email, a.guardian_phone,
            p.verification_status AS payment_status, p.amount_paid,
+           (CASE WHEN a.passport_photo IS NOT NULL AND a.passport_photo != '' THEN 1 ELSE 0 END) AS has_photo,
+           (CASE WHEN p.receipt_path IS NOT NULL AND p.receipt_path != '' THEN 1 ELSE 0 END) AS has_receipt,
            a.created_at
     FROM applicants a
     LEFT JOIN payments p ON p.applicant_id = a.id
@@ -560,6 +563,167 @@ router.get('/stats/summary', authenticate, async (req, res) => {
   } catch (err) {
     console.error('Stats error DETAILED:', err);
     res.status(500).json({ error: 'Failed to retrieve dashboard stats', details: err.message });
+  }
+});
+
+// ─── GET /api/applicants/letter  (public: download admission letter as PDF) ──
+router.get('/letter', async (req, res) => {
+  const { form, sig } = req.query;
+  if (!form || !sig) {
+    return res.status(400).send('<html><body style="font-family:sans-serif;padding:40px"><p>Invalid link.</p></body></html>');
+  }
+
+  const secret = process.env.JWT_SECRET || 'uisa_dev_secret';
+  const expectedSig = crypto.createHmac('sha256', secret).update(form).digest('hex');
+  if (sig !== expectedSig) {
+    return res.status(403).send('<html><body style="font-family:sans-serif;padding:40px"><p>This link is invalid. Please contact the camp office.</p></body></html>');
+  }
+
+  try {
+    const [rows] = await pool.query(`
+      SELECT a.first_name, a.middle_name, a.surname, a.form_number,
+             a.sport_selection, a.age_category,
+             a.guardian_name, a.group_assigned, a.room_number, a.coach_assigned
+      FROM applicants a
+      WHERE LOWER(TRIM(a.form_number)) = LOWER(TRIM(?))
+      LIMIT 1`, [form]);
+
+    if (!rows.length) {
+      return res.status(404).send('<html><body style="font-family:sans-serif;padding:40px"><p>Application not found.</p></body></html>');
+    }
+
+    const a     = rows[0];
+    const fullName = [a.first_name, a.middle_name, a.surname].filter(Boolean).join(' ');
+    const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+
+    const PDFDocument = require('pdfkit');
+    const doc = new PDFDocument({
+      size: 'A4',
+      margin: 56,
+      info: {
+        Title:   `Admission Letter – ${a.form_number}`,
+        Author:  'University of Ibadan Sports Academy',
+        Subject: '2026 Summer Sports Camp – Official Admission',
+      },
+    });
+
+    const filename = `Admission-Letter-${(a.form_number || form).replace(/[^A-Za-z0-9-]/g, '-')}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    doc.pipe(res);
+
+    const navy = '#0A3D62';
+    const lm   = 56;
+    const w    = doc.page.width - lm * 2;  // ≈ 483
+
+    // ── HEADER ────────────────────────────────────────────────────────────
+    doc.fontSize(16).fillColor(navy).font('Helvetica-Bold')
+       .text('UNIVERSITY OF IBADAN SPORTS ACADEMY', lm, 56, { width: w, align: 'center' });
+    doc.fontSize(11).fillColor('#334155').font('Helvetica')
+       .text('Official Admission Offer  \u00b7  2026 Summer Sports Camp', { width: w, align: 'center' });
+    doc.moveDown(0.5);
+    const ruleY = doc.y;
+    doc.moveTo(lm, ruleY).lineTo(lm + w, ruleY).lineWidth(2).strokeColor(navy).stroke();
+    doc.moveDown(1.4);
+
+    // ── TITLE + SALUTATION ────────────────────────────────────────────────
+    doc.fontSize(18).fillColor(navy).font('Helvetica-Bold')
+       .text('Offer of Official Admission', { width: w });
+    doc.moveDown(0.8);
+
+    doc.fontSize(12).fillColor('#111827');
+    doc.font('Helvetica').text('Date:  ', { continued: true })
+       .font('Helvetica-Bold').text(today, { width: w });
+    doc.moveDown(0.3);
+    doc.font('Helvetica').text('Dear ', { continued: true })
+       .font('Helvetica-Bold').text(`${a.guardian_name || 'Parent/Guardian'},`, { width: w });
+    doc.moveDown(0.7);
+
+    // ── BODY PARAGRAPHS ───────────────────────────────────────────────────
+    doc.font('Helvetica').fontSize(12).lineGap(3).fillColor('#111827');
+    doc.text('We are pleased to inform you that ', { continued: true })
+       .font('Helvetica-Bold').text(fullName, { continued: true })
+       .font('Helvetica').text(' has been officially admitted into the University of Ibadan Sports Academy 2026 Summer Sports Camp.', { width: w });
+    doc.moveDown(0.4);
+    doc.text('This admission follows the successful review of the application, verification of payment, and approval of all submitted documentation.', { width: w });
+    doc.moveDown(1);
+
+    // ── INFO TABLE ────────────────────────────────────────────────────────
+    const tableRows = [
+      ['Applicant Name',  fullName],
+      ['Form Number',     a.form_number],
+      ['Sport',           a.sport_selection  || '\u2014'],
+      ['Category',        a.age_category     || '\u2014'],
+      ['Training Group',  a.group_assigned   || 'TBA'],
+      ['Assigned Coach',  a.coach_assigned   || 'TBA'],
+      ['Accommodation',   a.room_number      || 'TBA'],
+      ['Camp Period',     'August 3 \u2013 August 28, 2026'],
+      ['Resumption',      'Monday, August 3, 2026  \u00b7  7:00 AM \u2013 9:00 AM'],
+      ['Venue',           'International School, University of Ibadan'],
+    ];
+
+    const rowH   = 24;
+    const labelW = 190;
+    let ty = doc.y;
+
+    // outer border
+    doc.rect(lm, ty, w, rowH * tableRows.length)
+       .lineWidth(1).strokeColor('#D1D5DB').stroke();
+
+    tableRows.forEach(([label, value], i) => {
+      const bg = i % 2 === 0 ? '#F8FAFC' : '#FFFFFF';
+      doc.rect(lm, ty, w, rowH).fillColor(bg).fill();
+      if (i > 0) {
+        doc.moveTo(lm, ty).lineTo(lm + w, ty)
+           .lineWidth(0.5).strokeColor('#E5E7EB').stroke();
+      }
+      doc.moveTo(lm + labelW, ty).lineTo(lm + labelW, ty + rowH)
+         .lineWidth(0.5).strokeColor('#E5E7EB').stroke();
+      doc.fillColor('#374151').font('Helvetica-Bold').fontSize(10)
+         .text(label, lm + 8, ty + 7, { width: labelW - 16, lineBreak: false });
+      doc.fillColor('#111827').font('Helvetica').fontSize(10)
+         .text(value, lm + labelW + 8, ty + 7, { width: w - labelW - 16, lineBreak: false });
+      ty += rowH;
+    });
+
+    // advance cursor past the table
+    doc.text('', lm, ty + 18);
+
+    // ── CLOSING ───────────────────────────────────────────────────────────
+    doc.font('Helvetica').fontSize(12).lineGap(3).fillColor('#111827');
+    doc.text('Kindly present this letter along with proof of payment and all required documents on arrival.', { width: w });
+    doc.moveDown(0.4);
+    doc.text('We look forward to welcoming ', { continued: true })
+       .font('Helvetica-Bold').text(fullName, { continued: true })
+       .font('Helvetica').text(' to an exciting month of sports, learning and personal development.', { width: w });
+    doc.moveDown(0.4);
+    doc.font('Helvetica-Oblique').fillColor(navy)
+       .text('Developing Champions in Sports and Character.', { width: w });
+    doc.moveDown(2.5);
+
+    // ── SIGNATURE ─────────────────────────────────────────────────────────
+    const sigY = doc.y;
+    doc.moveTo(lm, sigY).lineTo(lm + 200, sigY)
+       .lineWidth(1).strokeColor('#111827').stroke();
+    doc.moveDown(0.5);
+    doc.font('Helvetica').fillColor('#374151').fontSize(11)
+       .text('Camp Director', { width: w })
+       .text('University of Ibadan Sports Academy', { width: w });
+
+    // ── FOOTER ────────────────────────────────────────────────────────────
+    doc.fontSize(9).fillColor('#9CA3AF')
+       .text(
+         '\u00a9 2026 University of Ibadan Sports Academy  \u00b7  Ibadan, Nigeria  \u00b7  +234 803 687 0535',
+         lm, doc.page.height - 46,
+         { width: w, align: 'center', lineBreak: false }
+       );
+
+    doc.end();
+  } catch (err) {
+    console.error('Letter PDF error:', err);
+    if (!res.headersSent) {
+      res.status(500).send('<html><body style="font-family:sans-serif;padding:40px"><p>An error occurred. Please try again later.</p></body></html>');
+    }
   }
 });
 
@@ -761,7 +925,7 @@ router.patch('/:id/documents',
     }
 
     const [rows] = await pool.query(
-      `SELECT id, first_name, surname, passport_photo, birth_certificate, school_result
+      `SELECT id, form_number, first_name, surname, passport_photo, birth_certificate, school_result
        FROM applicants
        WHERE id = ?
          AND LOWER(TRIM(form_number))     = LOWER(TRIM(?))
@@ -775,7 +939,6 @@ router.patch('/:id/documents',
 
     const appl   = rows[0];
     const files  = req.files || {};
-    const IS_VERCEL = process.env.VERCEL === '1';
 
     // We respond immediately and handle Cloudinary uploads in the background.
     // This prevents "memory:" paths from being stored in the database.
