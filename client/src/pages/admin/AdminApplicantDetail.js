@@ -91,6 +91,7 @@ export default function AdminApplicantDetail() {
     rejection_reason: '' 
   });
   const [saving, setSaving]   = useState(false);
+  const [emailSending, setEmailSending] = useState(''); // tracks which email type is in-flight
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({});
@@ -170,11 +171,15 @@ export default function AdminApplicantDetail() {
   };
 
   const triggerEmail = async (type) => {
+    if (emailSending) return;
+    setEmailSending(type);
     try {
       await api.post(`/applicants/${id}/send-email`, { type });
-      toast.success('Email triggered successfully');
+      toast.success('Email sent successfully');
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to send email');
+    } finally {
+      setEmailSending('');
     }
   };
 
@@ -556,18 +561,25 @@ export default function AdminApplicantDetail() {
             <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--navy)', marginBottom: 14, textTransform: 'uppercase', letterSpacing: '.5px' }}>Communication</div>
             <p style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 12 }}>Manually trigger notification emails to the guardian.</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <button className="btn btn-outline btn-sm" style={{ justifyContent: 'flex-start' }} onClick={() => triggerEmail('registration_received')}>
-                <Mail size={13} style={{ marginRight: 8 }} /> Registration Confirmation
-              </button>
-              <button className="btn btn-outline btn-sm" style={{ justifyContent: 'flex-start' }} onClick={() => triggerEmail('payment_submitted')}>
-                <Mail size={13} style={{ marginRight: 8 }} /> Receipt Acknowledgment
-              </button>
-              <button className="btn btn-outline btn-sm" style={{ justifyContent: 'flex-start' }} onClick={() => triggerEmail('payment_verified')}>
-                <Mail size={13} style={{ marginRight: 8 }} /> Payment Verification
-              </button>
-              <button className="btn btn-outline btn-sm" style={{ justifyContent: 'flex-start' }} onClick={() => triggerEmail('admitted')}>
-                <Mail size={13} style={{ marginRight: 8 }} /> Admission Letter
-              </button>
+              {[
+                { type: 'registration_received', label: 'Registration Confirmation' },
+                { type: 'payment_submitted',     label: 'Receipt Acknowledgment' },
+                { type: 'payment_verified',      label: 'Payment Verification' },
+                { type: 'admitted',              label: 'Admission Letter' },
+              ].map(({ type, label }) => (
+                <button
+                  key={type}
+                  className="btn btn-outline btn-sm"
+                  style={{ justifyContent: 'flex-start', opacity: emailSending && emailSending !== type ? 0.5 : 1, cursor: emailSending ? 'not-allowed' : 'pointer' }}
+                  disabled={!!emailSending}
+                  onClick={() => triggerEmail(type)}
+                >
+                  {emailSending === type
+                    ? <><span style={{ width: 13, height: 13, border: '2px solid currentColor', borderTopColor: 'transparent', borderRadius: '50%', display: 'inline-block', marginRight: 8, animation: 'spin 0.7s linear infinite', flexShrink: 0 }} /> Sending…</>
+                    : <><Mail size={13} style={{ marginRight: 8 }} /> {label}</>
+                  }
+                </button>
+              ))}
             </div>
           </div>
 

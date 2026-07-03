@@ -3,8 +3,8 @@ const pool = require('../db/pool');
 
 const transporter = nodemailer.createTransport({
   host:   process.env.SMTP_HOST || 'smtp.gmail.com',
-  port:   parseInt(process.env.SMTP_PORT) || 587,
-  secure: false, // true for 465, false for other ports
+  port:   parseInt(process.env.SMTP_PORT) || 465,
+  secure: parseInt(process.env.SMTP_PORT) === 465 || !process.env.SMTP_PORT, // true for port 465 (SSL)
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
@@ -100,46 +100,99 @@ const templates = {
   }),
   admitted: (data) => ({
     subject: `Official Admission Offer – ${data.full_name} | UI Sports Academy`,
-    html: baseTemplate('Congratulations! Admission Offered 🏆', `
+    html: `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Official Admission Offer - ${data.form_number}</title>
+  <style>
+    body { font-family: Georgia, 'Times New Roman', serif; margin: 0; background: #f4f7f9; color: #111827; }
+    .page { max-width: 720px; margin: 30px auto; background: #fff; border: 1px solid #e1e8ed; border-radius: 8px; overflow: hidden; }
+    .header { background: #0A3D62; padding: 28px 36px; }
+    .header-org { color: #fff; font-family: Arial, sans-serif; font-weight: 800; font-size: 20px; }
+    .header-sub { color: rgba(255,255,255,0.7); font-family: Arial, sans-serif; font-size: 13px; margin-top: 4px; }
+    .body { padding: 36px; }
+    h1 { font-family: Arial, sans-serif; color: #0A3D62; font-size: 22px; margin: 0 0 20px; }
+    h2 { font-family: Arial, sans-serif; color: #0A3D62; font-size: 16px; margin: 24px 0 10px; border-bottom: 1px solid #e5e7eb; padding-bottom: 6px; }
+    p { font-size: 15px; line-height: 1.7; margin: 0 0 14px; }
+    .info { margin: 20px 0; border: 1px solid #e5e7eb; border-radius: 6px; overflow: hidden; }
+    .row { display: table; width: 100%; border-bottom: 1px solid #e5e7eb; }
+    .row:last-child { border-bottom: 0; }
+    .lbl { display: table-cell; width: 45%; padding: 10px 14px; background: #f9fafb; font-family: Arial, sans-serif; font-weight: 700; font-size: 13px; color: #374151; }
+    .val { display: table-cell; padding: 10px 14px; font-family: Arial, sans-serif; font-size: 13px; color: #111827; }
+    .badge-green { display: inline-block; background: #f0fff4; color: #16a34a; font-weight: 700; padding: 2px 10px; border-radius: 9999px; font-size: 12px; }
+    .checklist { margin: 8px 0 0; padding-left: 20px; font-size: 14px; line-height: 1.8; }
+    .sign { margin-top: 36px; border-top: 1px solid #d1d5db; padding-top: 10px; font-family: Arial, sans-serif; font-size: 14px; color: #374151; }
+    .footer { padding: 16px 36px; text-align: center; color: #9ca3af; font-family: Arial, sans-serif; font-size: 12px; background: #f9fafb; border-top: 1px solid #e5e7eb; }
+    .print-btn-wrap { text-align: center; margin: 28px 0 8px; }
+    .print-btn { display: inline-block; background: #0A3D62; color: #fff; font-family: Arial, sans-serif; font-weight: 700; font-size: 14px; padding: 12px 32px; border-radius: 6px; border: none; cursor: pointer; letter-spacing: .3px; }
+    .print-btn:hover { background: #0c4e7a; }
+    @media print {
+      body { background: #fff; }
+      .page { margin: 0; border: none; border-radius: 0; box-shadow: none; }
+      .print-btn-wrap { display: none; }
+      .header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+      <div class="header-org">UNIVERSITY OF IBADAN SPORTS ACADEMY</div>
+      <div class="header-sub">Official Admission Offer · 2026 Summer Sports Camp</div>
+    </div>
+    <div class="body">
+      <h1>Congratulations! Admission Offered 🏆</h1>
       <p>Dear <strong>${data.guardian_name}</strong>,</p>
       <p>We are delighted to inform you that <strong>${data.full_name}</strong> has been offered admission into the 2026 University of Ibadan Sports Academy Summer Camp.</p>
-      
       <p>Following the successful review of the application and verification of all required documentation, the applicant has been selected to participate in this year's camp programme. This admission reflects our confidence in the applicant's potential and our commitment to supporting the development of young athletes in both sports performance and character.</p>
 
-      <div class="detail-box">
-        <div class="detail-row"><span class="detail-label">Form Number</span><span class="detail-value">${data.form_number}</span></div>
-        <div class="detail-row"><span class="detail-label">Participant</span><span class="detail-value">${data.full_name}</span></div>
-        <div class="detail-row"><span class="detail-label">Sport</span><span class="detail-value">${data.sport}</span></div>
-        <div class="detail-row"><span class="detail-label">Camp Period</span><span class="detail-value">August 3 – Aug 28, 2026</span></div>
-        <div class="detail-row"><span class="detail-label">Venue</span><span class="detail-value">International School, Univ. of Ibadan</span></div>
-        <div class="detail-row"><span class="detail-label">Training Group</span><span class="detail-value">${data.group || 'TBA'}</span></div>
-        <div class="detail-row"><span class="detail-label">Assigned Coach</span><span class="detail-value">${data.coach || 'TBA'}</span></div>
-        <div class="detail-row"><span class="detail-label">Accommodation</span><span class="detail-value">${data.room || 'TBA'}</span></div>
-        <div class="detail-row"><span class="detail-label">Admission Status</span><span class="detail-value"><span class="badge badge-green">Admitted</span></span></div>
+      <div class="info">
+        <div class="row"><div class="lbl">Form Number</div><div class="val">${data.form_number}</div></div>
+        <div class="row"><div class="lbl">Participant</div><div class="val">${data.full_name}</div></div>
+        <div class="row"><div class="lbl">Sport</div><div class="val">${data.sport}</div></div>
+        <div class="row"><div class="lbl">Camp Period</div><div class="val">August 3 – Aug 28, 2026</div></div>
+        <div class="row"><div class="lbl">Venue</div><div class="val">International School, Univ. of Ibadan</div></div>
+        <div class="row"><div class="lbl">Training Group</div><div class="val">${data.group_assigned || 'TBA'}</div></div>
+        <div class="row"><div class="lbl">Assigned Coach</div><div class="val">${data.coach_assigned || 'TBA'}</div></div>
+        <div class="row"><div class="lbl">Accommodation</div><div class="val">${data.room_number || 'TBA'}</div></div>
+        <div class="row"><div class="lbl">Admission Status</div><div class="val"><span class="badge-green">Admitted</span></div></div>
       </div>
 
       <h2>Arrival Information</h2>
       <p>Participants are expected to arrive on <strong>Monday, August 3, 2026</strong> between 7:00 AM and 9:00 AM for registration, orientation, and camp allocation.</p>
 
-      <div class="detail-box">
-        <p><strong>Please come along with:</strong></p>
-        <ul style="margin: 0; padding-left: 20px;">
-          <li>Printed admission letter</li>
-          <li>Proof of payment</li>
-          <li>Medical information (if applicable)</li>
-          <li>Any sport-specific equipment required</li>
-        </ul>
+      <div class="info">
+        <div class="row"><div class="lbl" colspan="2" style="width:100%;font-size:13px;font-weight:700;">Please come along with:</div></div>
+        <div class="row"><div class="val" style="padding:10px 14px;">
+          <ul class="checklist">
+            <li>Printed official admission letter</li>
+            <li>Proof of payment</li>
+            <li>Medical information (if applicable)</li>
+            <li>Any sport-specific equipment required</li>
+          </ul>
+        </div></div>
       </div>
 
       <h2>Important Notice</h2>
       <p>This admission is valid for the 2026 Summer Camp session only. Participants are expected to comply with all camp rules, safety regulations, and the code of conduct throughout the programme.</p>
-
       <p>We look forward to welcoming <strong>${data.full_name}</strong> to an exciting month of learning, competition, teamwork, discipline, and personal development.</p>
+      <p style="font-style:italic;color:#0A3D62;font-weight:700;">Developing Champions in Sports and Character.</p>
 
-      <p>Congratulations once again on your successful admission to the UI Sports Academy Summer Camp 2026.</p>
-      
-      <p style="font-style: italic; color: #0A3D62; font-weight: bold;">Developing Champions in Sports and Character.</p>
-    `)
+      <div class="sign">Camp Director</div>
+
+      <div class="print-btn-wrap">
+        <button class="print-btn" onclick="window.print()">⬇ Save / Print as PDF</button>
+      </div>
+    </div>
+    <div class="footer">
+      <p>&copy; 2026 University of Ibadan Sports Academy</p>
+      <p>Ibadan, Nigeria | +234 803 687 0535</p>
+    </div>
+  </div>
+</body>
+</html>`
   }),
 };
 
