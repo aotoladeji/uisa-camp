@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { ChevronLeft, ChevronRight, Check, Upload, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Check, Upload, X, Printer, ArrowRight } from 'lucide-react';
 import api from '../utils/api';
 import BrandLogo from '../components/BrandLogo';
 
@@ -243,8 +243,19 @@ export default function RegisterPage() {
       setReviewing(true);
       setTimeout(() => {
         setReviewing(false);
-        const paymentUrl = res.payment_url || `/payment?form_number=${encodeURIComponent(res.form_number || '')}&email=${encodeURIComponent(data.guardian_email || '')}`;
-        setRedirectUrl(paymentUrl);
+        if (res.auto_accepted) {
+          setAcceptedPayload({
+            form_number: res.form_number,
+            guardian_email: data.guardian_email,
+            first_name: data.first_name,
+            surname: data.surname,
+            sport_selection: data.sport_selection,
+            age_category: ageCategory(),
+          });
+        } else {
+          const paymentUrl = res.payment_url || `/payment?form_number=${encodeURIComponent(res.form_number || '')}&email=${encodeURIComponent(data.guardian_email || '')}`;
+          setRedirectUrl(paymentUrl);
+        }
       }, 2600);
     } catch (err) {
       toast.error(err.response?.data?.error || 'Registration failed. Please try again.');
@@ -314,6 +325,61 @@ export default function RegisterPage() {
     );
   }
 
+  const buildProvisionalLetterHtml = (app) => {
+    const fullName = `${app.first_name || ''} ${app.surname || ''}`.trim();
+    const date = new Date().toLocaleDateString('en-GB');
+    const formNumber = app.form_number || 'N/A';
+    const sport = app.sport_selection || 'N/A';
+    const category = app.age_category || 'N/A';
+    return `<!doctype html><html><head><meta charset="utf-8"/>
+<title>Provisional Letter - ${formNumber}</title>
+<style>
+  body{font-family:Georgia,serif;margin:0;color:#111827}
+  .page{max-width:800px;margin:0 auto;padding:40px}
+  .head{border-bottom:2px solid #0B2E63;padding-bottom:10px;margin-bottom:20px}
+  .org{color:#0B2E63;font-weight:800;font-size:20px}
+  h1{font-size:22px;color:#0B2E63}
+  .info{margin:20px 0;border:1px solid #E5E7EB;border-radius:8px;overflow:hidden}
+  .row{display:grid;grid-template-columns:200px 1fr;border-bottom:1px solid #E5E7EB}
+  .row:last-child{border-bottom:0}
+  .lbl{padding:10px;background:#F9FAFB;font-weight:700;font-size:14px}
+  .val{padding:10px;font-size:14px}
+  .sign{margin-top:40px;border-top:1px solid #000;width:200px;padding-top:5px;font-size:14px}
+  @media print{.page{padding:24px}}
+</style></head>
+<body><div class="page">
+<div class="head"><div class="org">UNIVERSITY OF IBADAN SPORTS ACADEMY</div>
+<div style="font-size:13px;color:#334155">Offer of Provisional Admission · 2026 Summer Sports Camp</div></div>
+<h1>Provisional Admission Letter</h1>
+<p>Date: <strong>${date}</strong></p>
+<p>Dear Parent/Guardian,</p>
+<p>We are pleased to inform you that <strong>${fullName}</strong> has been offered provisional admission into the University of Ibadan Sports Academy 2026 Summer Sports Camp.</p>
+<div class="info">
+  <div class="row"><div class="lbl">Applicant Name</div><div class="val">${fullName}</div></div>
+  <div class="row"><div class="lbl">Form Number</div><div class="val">${formNumber}</div></div>
+  <div class="row"><div class="lbl">Sport</div><div class="val">${sport}</div></div>
+  <div class="row"><div class="lbl">Category</div><div class="val">${category}</div></div>
+  <div class="row"><div class="lbl">Venue</div><div class="val">International School, University of Ibadan</div></div>
+</div>
+<p><strong>Note:</strong> This provisional offer is subject to payment verification and medical clearance. Once verified, you will receive an Official Admission Offer with full camp details.</p>
+<div class="sign">Camp Director</div>
+</div></body></html>`;
+  };
+
+  const downloadProvisionalLetter = (app) => {
+    const html = buildProvisionalLetterHtml(app);
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `provisional-letter-${(app.form_number || 'uisa').replace(/[^a-zA-Z0-9-]/g, '-')}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success('Provisional letter downloaded');
+  };
+
   if (acceptedPayload) {
     return (
       <div style={{ minHeight: '100vh', background: 'var(--surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
@@ -322,18 +388,31 @@ export default function RegisterPage() {
             <Check size={28} color="var(--green)" strokeWidth={2.5} />
           </div>
           <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 26, fontWeight: 800, color: 'var(--navy)', marginBottom: 8 }}>
-            Application Accepted
+            Application Accepted!
           </h2>
           <p style={{ color: 'var(--text-2)', marginBottom: 20, lineHeight: 1.6 }}>
-            Congratulations. Your application has been accepted based on your submitted details.
+            Congratulations! Your application has been <strong>provisionally admitted</strong> based on your submitted details.
           </p>
-          <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-md)', padding: '16px 20px', marginBottom: 26, textAlign: 'left' }}>
+          <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-md)', padding: '16px 20px', marginBottom: 24, textAlign: 'left', border: '1px solid var(--border)' }}>
             <div style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 4 }}>Application Form Number</div>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, color: 'var(--navy)' }}>{acceptedPayload.form_number}</div>
           </div>
-          <Link to={`/payment?form_number=${encodeURIComponent(acceptedPayload.form_number || '')}&email=${encodeURIComponent(acceptedPayload.guardian_email || '')}`} className="btn btn-gold" style={{ width: '100%' }}>
-            Proceed to Payment
-          </Link>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <button
+              onClick={() => downloadProvisionalLetter(acceptedPayload)}
+              className="btn btn-outline"
+              style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+            >
+              <Printer size={16} /> Download Provisional Letter
+            </button>
+            <Link
+              to={`/payment?form_number=${encodeURIComponent(acceptedPayload.form_number || '')}&email=${encodeURIComponent(acceptedPayload.guardian_email || '')}`}
+              className="btn btn-gold"
+              style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+            >
+              Proceed to Payment <ArrowRight size={16} />
+            </Link>
+          </div>
         </div>
       </div>
     );

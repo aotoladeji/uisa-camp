@@ -46,6 +46,8 @@ const getPricingConfig = async (pool, now = new Date()) => {
 
   const regularFee = Math.max(0, toNumber(settings.camp_fee_amount, DEFAULT_CAMP_FEE));
   const deadline = new Date(settings.early_bird_deadline || DEFAULT_EARLY_BIRD_DEADLINE);
+  // Include the full deadline day — set to end of day 23:59:59
+  deadline.setHours(23, 59, 59, 999);
   const earlyBirdActive = Boolean(settings.early_bird_enabled) && now <= deadline;
   const discountPct = Math.max(0, Math.min(100, toNumber(settings.early_bird_discount_pct, 10)));
   const fixedEarlyBirdFee = toNumber(settings.early_bird_fee_amount, null);

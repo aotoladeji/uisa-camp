@@ -129,8 +129,8 @@ router.post('/',
       const category = age <= 17 ? 'Junior (6-17)' : 'Elite (18-23)';
       const autoAcceptMode = await getAutoAcceptMode();
       const autoAccepted = shouldAutoAcceptApplication(d, category, autoAcceptMode);
-      // We start all applicants at 'Pending' so Admin can review and trigger emails manually.
-      const initialStatus = 'Pending';
+      // Auto-accepted applicants get provisional admission immediately; others await admin review.
+      const initialStatus = autoAccepted ? 'Admitted' : 'Pending';
 
       const [result] = await pool.query(
         `INSERT INTO applicants (

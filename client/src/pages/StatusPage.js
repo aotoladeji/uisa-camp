@@ -279,25 +279,23 @@ export default function StatusPage() {
                   <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 16 }}>Progress</p>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
                     {TIMELINE.map((t, i) => {
-                      const done   = i < resTimelineStep;
-                      const active = i === resTimelineStep;
+                      // All steps shown as done for demo purposes
+                      const done = true;
                       return (
                         <div key={t.key} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
                           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                             <div style={{ width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
-                              background: done ? 'var(--navy)' : active ? 'var(--gold)' : 'var(--border)',
+                              background: 'var(--navy)',
                               display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              {done ? <CheckCircle size={14} color="white" />
-                                : <div style={{ width: 8, height: 8, borderRadius: '50%', background: active ? 'white' : 'var(--text-3)' }} />}
+                              <CheckCircle size={14} color="white" />
                             </div>
                             {i < TIMELINE.length - 1 && (
-                              <div style={{ width: 2, height: 24, background: done ? 'var(--navy)' : 'var(--border)', margin: '2px 0' }} />
+                              <div style={{ width: 2, height: 24, background: 'var(--navy)', margin: '2px 0' }} />
                             )}
                           </div>
                           <div style={{ paddingTop: 5 }}>
-                            <span style={{ fontSize: 13, fontWeight: active ? 700 : 500, color: done || active ? 'var(--text-1)' : 'var(--text-3)' }}>
+                            <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-1)' }}>
                               {t.label}
-                              {active && <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 700, color: 'var(--gold)', background: 'rgba(232,160,0,0.12)', padding: '2px 8px', borderRadius: 20 }}>Current</span>}
                             </span>
                           </div>
                         </div>
@@ -320,27 +318,23 @@ export default function StatusPage() {
                 </div>
               )}
 
-              {result.status === 'Admitted' && (
-                <div style={{ marginTop: 20, padding: '16px', background: 'var(--green-bg)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(22,163,74,0.3)' }}>
-                  <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--green)', marginBottom: 4 }}>🎉 Congratulations! {result.first_name} has been admitted.</p>
-                  <p style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 12 }}>
-                    Please arrive at International School, University of Ibadan on <strong>August 3, 2026</strong> between 7–9AM with the admission letter and all documents.
-                  </p>
-                  <div style={{ background: '#ffffff', border: '1px solid rgba(22,163,74,0.28)', borderRadius: 'var(--radius-md)', padding: '12px 14px' }}>
-                    <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--green)', marginBottom: 10 }}>
-                      Click below to get the admission letter.
-                    </p>
-                    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                      <button type="button" className="btn btn-primary btn-sm" onClick={() => downloadAdmissionLetter(result)}>
-                        <FileText size={14} /> Download Admission Letter
-                      </button>
-                      <button type="button" className="btn btn-outline btn-sm" onClick={() => printAdmissionLetter(result)}>
-                        <Printer size={14} /> Print Admission Letter
-                      </button>
-                    </div>
-                  </div>
+              {/* Provisional letter — available to all registered applicants */}
+              <div style={{ marginTop: 20, padding: '16px', background: 'var(--green-bg)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(22,163,74,0.3)' }}>
+                <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--green)', marginBottom: 4 }}>
+                  📄 Provisional Admission Letter
+                </p>
+                <p style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 12 }}>
+                  Download or print your provisional admission letter. The official admission letter will be sent to your email by the admin after payment and document verification.
+                </p>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  <button type="button" className="btn btn-primary btn-sm" onClick={() => downloadAdmissionLetter(result)}>
+                    <FileText size={14} /> Download Provisional Letter
+                  </button>
+                  <button type="button" className="btn btn-outline btn-sm" onClick={() => printAdmissionLetter(result)}>
+                    <Printer size={14} /> Print Provisional Letter
+                  </button>
                 </div>
-              )}
+              </div>
             </div>
           </div>
           );
