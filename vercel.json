@@ -8,7 +8,8 @@
   ],
   "functions": {
     "api/index.js": {
-      "includeFiles": "server/**"
+      "includeFiles": "server/**",
+      "excludeFiles": "server/node_modules/**"
     }
   }
 }
