@@ -82,9 +82,9 @@ router.post('/',
   }
 );
 
-router.patch('/:id', authenticate, requireRole('admin', 'super_admin'), async (req, res) => {
+router.patch('/:id', authenticate, requireRole('admin', 'super_admin'), upload.single('photo'), async (req, res) => {
   try {
-    const { full_name, designation, department, phone, email, theme_color } = req.body;
+    const { full_name, designation, department, phone, email, theme_color, username } = req.body;
     const updates = [];
     const params = [];
     if (full_name !== undefined) { updates.push('full_name = ?'); params.push(full_name); }
@@ -92,7 +92,17 @@ router.patch('/:id', authenticate, requireRole('admin', 'super_admin'), async (r
     if (department !== undefined) { updates.push('department = ?'); params.push(department); }
     if (phone !== undefined) { updates.push('phone = ?'); params.push(phone); }
     if (email !== undefined) { updates.push('email = ?'); params.push(email); }
+    if (username !== undefined) { updates.push('username = ?'); params.push(username); }
     if (theme_color !== undefined) { updates.push('theme_color = ?'); params.push(theme_color); }
+    if (req.file) {
+      try {
+        const photoUrl = await cloudinary.uploadToCloudinary(req.file.buffer, 'uisa/staff', `staff-${Date.now()}`);
+        updates.push('photo_url = ?');
+        params.push(photoUrl);
+      } catch (cloudErr) {
+        console.warn('Staff photo upload failed:', cloudErr.message);
+      }
+    }
     if (!updates.length) return res.json({ success: true });
     params.push(req.params.id);
     await pool.query(`UPDATE staff_members SET ${updates.join(', ')} WHERE id = ?`, params);
@@ -100,6 +110,16 @@ router.patch('/:id', authenticate, requireRole('admin', 'super_admin'), async (r
   } catch (err) {
     console.error('Staff update error:', err);
     res.status(500).json({ error: 'Failed to update staff' });
+  }
+});
+
+router.delete('/:id', authenticate, requireRole('admin', 'super_admin'), async (req, res) => {
+  try {
+    await pool.query('DELETE FROM staff_members WHERE id = ?', [req.params.id]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Staff delete error:', err);
+    res.status(500).json({ error: 'Failed to delete staff' });
   }
 });
 

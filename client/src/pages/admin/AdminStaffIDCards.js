@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
+import Barcode from 'react-barcode';
 import { Printer, Search, CheckSquare, Square, RefreshCcw } from 'lucide-react';
 import api from '../../utils/api';
 
@@ -97,17 +98,22 @@ export default function AdminStaffIDCards() {
           )}
         </div>
 
-        <div className="id-card-body">
+        <div className="id-card-body" style={{ paddingBottom: 12 }}>
           <div className="id-card-name" style={{ color: accent }}>{(item.full_name || 'Staff Member').toUpperCase()}</div>
           <div className="id-card-role" style={{ color: accent }}>{(item.designation || 'Staff').toUpperCase()}</div>
 
-          <div className="id-card-details">
+          <div className="id-card-details" style={{ marginTop: 10 }}>
             <div><span>ID NO</span><b>{idNumber}</b></div>
             <div><span>DEPT</span><b>{item.department || 'Staff'}</b></div>
             <div><span>PHONE</span><b>{item.phone || 'N/A'}</b></div>
-            <div><span>WEB</span><b>sportsacademy.ui.edu.ng</b></div>
+          </div>
+
+          <div className="id-card-barcode" style={{ marginTop: 12, paddingTop: 10, borderTop: `1px solid ${accent}22` }}>
+            <Barcode value={idNumber} width={1.1} height={44} displayValue={false} background="#ffffff" lineColor={accent} />
           </div>
         </div>
+
+        <div style={{ height: 18, background: accent }} />
       </div>
     );
   };
@@ -123,7 +129,7 @@ export default function AdminStaffIDCards() {
     const phone = escapeHtml(item.phone || 'N/A');
     const photoHtml = item.photo_url ? `<img src="${item.photo_url}" alt="${name}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" />` : `<div style="display:flex;align-items:center;justify-content:center;height:100%;font-weight:800;font-size:28px;color:${accent}">${(name || 'S').slice(0, 2).toUpperCase()}</div>`;
 
-    printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8" /><title>${name} ID Card</title><style>body{margin:0;font-family:Arial,sans-serif;background:#f3f4f6;padding:20px} .wrap{width:760px;margin:0 auto;background:#fff;border:2px solid ${accent};border-radius:16px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.12)} .head{background:${accent};padding:18px 16px 80px;text-align:center;position:relative} .head::after{content:'';position:absolute;left:-8%;right:-8%;bottom:-45px;height:90px;border-radius:50%;background:#fff;border-top:4px solid ${accent}} .company{color:#fff;font-weight:800;letter-spacing:.4px;font-size:17px;font-family:var(--font-display)} .tag{color:rgba(255,255,255,.82);font-size:11px;letter-spacing:.4px} .photo-wrap{display:flex;justify-content:center;margin-top:-52px;position:relative;z-index:2} .photo{width:110px;height:110px;border-radius:50%;border:5px solid ${accent};object-fit:cover;background:#d6dee8;display:flex;align-items:center;justify-content:center} .body{padding:14px 18px 16px} .name{text-align:center;font-family:var(--font-display);color:${accent};font-size:24px;font-weight:900;line-height:1.1;margin-top:2px} .role{text-align:center;font-size:13px;font-weight:800;color:${accent};letter-spacing:.8px;margin:2px 0 10px} .details{display:flex;flex-direction:column;gap:6px} .row{display:grid;grid-template-columns:70px 1fr;gap:8px;align-items:baseline} .label{color:${accent};font-weight:800;font-size:12px} .value{color:#1f2f44;font-size:13px;overflow-wrap:anywhere} </style></head><body><div class="wrap"><div class="head"><div class="company">UI SPORTS ACADEMY</div><div class="tag">STAFF ID CARD</div></div><div class="photo-wrap"><div class="photo">${photoHtml}</div></div><div class="body"><div class="name">${name}</div><div class="role">${designation}</div><div class="details"><div class="row"><span class="label">ID NO</span><b class="value">${idNumber}</b></div><div class="row"><span class="label">DEPT</span><b class="value">${department}</b></div><div class="row"><span class="label">PHONE</span><b class="value">${phone}</b></div><div class="row"><span class="label">WEB</span><b class="value">sportsacademy.ui.edu.ng</b></div></div></div></div></body></html>`);
+    printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8" /><title>${name} ID Card</title><style>body{margin:0;font-family:Arial,sans-serif;background:#f3f4f6;padding:20px} .wrap{width:760px;margin:0 auto;background:#fff;border:2px solid ${accent};border-radius:16px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.12)} .head{background:${accent};padding:18px 16px 78px;text-align:center;position:relative} .head::after{content:'';position:absolute;left:-8%;right:-8%;bottom:-45px;height:90px;border-radius:50%;background:#fff;border-top:4px solid ${accent}} .company{color:#fff;font-weight:800;letter-spacing:.4px;font-size:17px;font-family:Arial,sans-serif} .tag{color:rgba(255,255,255,.82);font-size:11px;letter-spacing:.4px} .photo-wrap{display:flex;justify-content:center;margin-top:-52px;position:relative;z-index:2} .photo{width:110px;height:110px;border-radius:50%;border:5px solid ${accent};object-fit:cover;background:#d6dee8;display:flex;align-items:center;justify-content:center} .body{padding:14px 18px 16px} .name{text-align:center;font-family:Arial,sans-serif;color:${accent};font-size:24px;font-weight:900;line-height:1.1;margin-top:2px} .role{text-align:center;font-size:13px;font-weight:800;color:${accent};letter-spacing:.8px;margin:2px 0 10px} .details{display:flex;flex-direction:column;gap:6px} .row{display:grid;grid-template-columns:70px 1fr;gap:8px;align-items:baseline} .label{color:${accent};font-weight:800;font-size:12px} .value{color:#1f2f44;font-size:13px;overflow-wrap:anywhere} .barcodeWrap{display:flex;justify-content:center;padding-top:12px;margin-top:8px;border-top:1px solid ${accent}22} .footer{height:18px;background:${accent}} </style></head><body><div class="wrap"><div class="head"><div class="company">UI SPORTS ACADEMY</div><div class="tag">STAFF ID CARD</div></div><div class="photo-wrap"><div class="photo">${photoHtml}</div></div><div class="body"><div class="name">${name}</div><div class="role">${designation}</div><div class="details"><div class="row"><span class="label">ID NO</span><b class="value">${idNumber}</b></div><div class="row"><span class="label">DEPT</span><b class="value">${department}</b></div><div class="row"><span class="label">PHONE</span><b class="value">${phone}</b></div><div class="barcodeWrap"><svg id="barcode" /></div></div></div><div class="footer"></div></div><script>const value='${idNumber}';const canvas=document.createElement('canvas');const ctx=canvas.getContext('2d');ctx.fillStyle='#ffffff';ctx.fillRect(0,0,200,80);ctx.strokeStyle='${accent}';ctx.lineWidth=2;let x=10;for(let i=0;i<value.length;i++){const ch=value.charCodeAt(i);for(let j=0;j<7;j++){if((ch>>j)&1){ctx.fillRect(x,10,2,60);}x+=2;}}const svg=document.getElementById('barcode');const img=new Image();img.src=canvas.toDataURL('image/png');img.style.display='block';svg.parentNode.replaceChild(img,svg);</script></body></html>`);
     printWindow.document.close();
     printWindow.focus();
     setTimeout(() => printWindow.print(), 600);

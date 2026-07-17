@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Plus, Upload, UserCheck } from 'lucide-react';
+import { Plus, Upload, UserCheck, Pencil, Trash2 } from 'lucide-react';
 import api from '../../utils/api';
 
 export default function AdminStaff() {
@@ -8,6 +8,7 @@ export default function AdminStaff() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState({ full_name: '', designation: '', department: 'Coaching', phone: '', email: '', username: '', theme_color: '#0F766E' });
   const [photo, setPhoto] = useState(null);
 
@@ -24,6 +25,13 @@ export default function AdminStaff() {
 
   useEffect(() => { fetchStaff(); }, []);
 
+  const resetForm = () => {
+    setForm({ full_name: '', designation: '', department: 'Coaching', phone: '', email: '', username: '', theme_color: '#0F766E' });
+    setPhoto(null);
+    setEditingId(null);
+    setShowForm(false);
+  };
+
   const handleSubmit = async e => {
     e.preventDefault();
     setSaving(true);
@@ -33,16 +41,45 @@ export default function AdminStaff() {
         if (value) fd.append(key, value);
       });
       if (photo) fd.append('photo', photo);
-      const { data } = await api.post('/staff', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-      toast.success(`Staff created: ${data.full_name}`);
-      setForm({ full_name: '', designation: '', department: 'Coaching', phone: '', email: '', username: '', theme_color: '#0F766E' });
-      setPhoto(null);
-      setShowForm(false);
+      if (editingId) {
+        await api.patch(`/staff/${editingId}`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+        toast.success('Staff updated');
+      } else {
+        const { data } = await api.post('/staff', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+        toast.success(`Staff created: ${data.full_name}`);
+      }
+      resetForm();
       fetchStaff();
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to create staff');
+      toast.error(err.response?.data?.error || (editingId ? 'Failed to update staff' : 'Failed to create staff'));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const startEdit = (item) => {
+    setEditingId(item.id);
+    setForm({
+      full_name: item.full_name || '',
+      designation: item.designation || '',
+      department: item.department || 'Coaching',
+      phone: item.phone || '',
+      email: item.email || '',
+      username: item.username || '',
+      theme_color: item.theme_color || '#0F766E',
+    });
+    setPhoto(null);
+    setShowForm(true);
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Delete this staff record?')) return;
+    try {
+      await api.delete(`/staff/${id}`);
+      toast.success('Staff deleted');
+      fetchStaff();
+    } catch {
+      toast.error('Failed to delete staff');
     }
   };
 
@@ -60,7 +97,7 @@ export default function AdminStaff() {
 
       {showForm && (
         <div className="card" style={{ padding: 24, marginBottom: 20 }}>
-          <h3 style={{ fontWeight: 800, marginBottom: 16 }}>Create New Staff</h3>
+          <h3 style={{ fontWeight: 800, marginBottom: 16 }}>{editingId ? 'Edit Staff' : 'Create New Staff'}</h3>
           <form onSubmit={handleSubmit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
             <div className="form-field">
               <label>Full Name</label>
@@ -95,9 +132,9 @@ export default function AdminStaff() {
               <input className="form-input" type="file" accept="image/*" onChange={e => setPhoto(e.target.files?.[0] || null)} />
             </div>
             <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 10 }}>
-              <button type="button" className="btn btn-outline btn-sm" onClick={() => setShowForm(false)}>Cancel</button>
+              <button type="button" className="btn btn-outline btn-sm" onClick={resetForm}>Cancel</button>
               <button type="submit" className="btn btn-primary btn-sm" disabled={saving}>
-                {saving ? 'Creating…' : <><Upload size={14} /> Create Staff</>}
+                {saving ? (editingId ? 'Saving…' : 'Creating…') : <><Upload size={14} /> {editingId ? 'Save Changes' : 'Create Staff'}</>}
               </button>
             </div>
           </form>
@@ -114,6 +151,7 @@ export default function AdminStaff() {
                 <th>Department</th>
                 <th>Contact</th>
                 <th>Theme</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -134,6 +172,12 @@ export default function AdminStaff() {
                   <td>{item.department}</td>
                   <td style={{ fontSize: 13 }}>{item.email || item.phone || '—'}</td>
                   <td><span style={{ padding: '4px 8px', borderRadius: 999, background: item.theme_color || '#0F766E', color: 'white', fontSize: 12 }}>{item.theme_color || '#0F766E'}</span></td>
+                  <td>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button className="btn btn-outline btn-sm" onClick={() => startEdit(item)}><Pencil size={14} /></button>
+                      <button className="btn btn-danger btn-sm" onClick={() => handleDelete(item.id)}><Trash2 size={14} /></button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
