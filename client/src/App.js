@@ -19,6 +19,8 @@ import AdminApplicantDetail from './pages/admin/AdminApplicantDetail';
 import AdminPayments    from './pages/admin/AdminPayments';
 import AdminUsers       from './pages/admin/AdminUsers';
 import AdminIDCards     from './pages/admin/AdminIDCards';
+import AdminStaff       from './pages/admin/AdminStaff';
+import AdminStaffIDCards from './pages/admin/AdminStaffIDCards';
 import ChangePassword  from './pages/admin/ChangePassword';
 
 const ProtectedRoute = ({ children, roles }) => {
@@ -53,6 +55,12 @@ export default function App() {
           <Route path="/admin/id-cards" element={
             <ProtectedRoute><AdminLayout><AdminIDCards /></AdminLayout></ProtectedRoute>
           } />
+          <Route path="/admin/staff" element={
+            <ProtectedRoute><AdminLayout><AdminStaff /></AdminLayout></ProtectedRoute>
+          } />
+          <Route path="/admin/staff-id-cards" element={
+            <ProtectedRoute><AdminLayout><AdminStaffIDCards /></AdminLayout></ProtectedRoute>
+          } />
           <Route path="/admin" element={
             <ProtectedRoute><AdminLayout /></ProtectedRoute>
           }>
@@ -64,6 +72,8 @@ export default function App() {
             <Route path="users"      element={
               <ProtectedRoute roles={['super_admin']}><AdminUsers /></ProtectedRoute>
             } />
+            <Route path="staff" element={<AdminStaff />} />
+            <Route path="staff-id-cards" element={<AdminStaffIDCards />} />
             <Route path="*" element={<Navigate to="/admin" replace />} />
           </Route>
 

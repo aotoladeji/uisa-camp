@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import {
-  LayoutDashboard, Users, CreditCard, UserCog, FileText,
-  LogOut, Menu, X, ChevronRight, KeyRound
+  LayoutDashboard, Users, CreditCard, UserCog, FileText, UserCheck,
+  LogOut, Menu, X, ChevronRight, KeyRound, BadgeCheck
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import BrandLogo from '../../components/BrandLogo';
@@ -12,6 +12,8 @@ const NAV_ITEMS = [
   { to: '/admin/applicants', icon: Users,            label: 'Applicants' },
   { to: '/admin/payments',   icon: CreditCard,       label: 'Payments' },
   { to: '/admin/id-cards',   icon: FileText,         label: 'ID Cards' },
+  { to: '/admin/staff',      icon: UserCheck,        label: 'Staff' },
+  { to: '/admin/staff-id-cards', icon: BadgeCheck, label: 'Staff ID Cards' },
   { to: '/admin/users',      icon: UserCog,          label: 'Admin Users', roles: ['super_admin'] },
 ];
 

@@ -131,9 +131,22 @@ CREATE TABLE IF NOT EXISTS admin_users (
   username      TEXT UNIQUE,
   email         TEXT UNIQUE,
   password_hash TEXT NOT NULL,
-  role          TEXT DEFAULT 'verifier' CHECK (role IN ('super_admin','admin','verifier')),
+  role          TEXT DEFAULT 'verifier' CHECK (role IN ('super_admin','admin','verifier','coach','volunteer')),
   is_active     INTEGER DEFAULT 1,
   last_login    TEXT,
+  created_at    TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS staff_members (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  full_name     TEXT NOT NULL,
+  designation   TEXT NOT NULL,
+  department    TEXT DEFAULT 'Staff',
+  phone         TEXT,
+  email         TEXT,
+  username      TEXT UNIQUE,
+  photo_url     TEXT,
+  theme_color   TEXT DEFAULT '#0F766E',
   created_at    TEXT DEFAULT CURRENT_TIMESTAMP
 );
 

@@ -17,7 +17,7 @@ export default function AdminUsers() {
   const [showForm, setShowForm] = useState(false);
   const [showPwd, setShowPwd]   = useState(false);
   const [saving, setSaving]     = useState(false);
-  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'verifier' });
+  const [form, setForm] = useState({ name: '', username: '', email: '', password: '', role: 'verifier' });
 
   const fetchAdmins = async () => {
     try {
@@ -34,9 +34,9 @@ export default function AdminUsers() {
     if (form.password.length < 8) { toast.error('Password must be at least 8 characters'); return; }
     setSaving(true);
     try {
-      await api.post('/auth/create-admin', form);
-      toast.success('Admin user created');
-      setForm({ name: '', email: '', password: '', role: 'verifier' });
+      const { data } = await api.post('/auth/create-admin', form);
+      toast.success(`${data.name} created — username: ${data.username}`);
+      setForm({ name: '', username: '', email: '', password: '', role: 'verifier' });
       setShowForm(false);
       fetchAdmins();
     } catch (err) {
@@ -75,12 +75,17 @@ export default function AdminUsers() {
       {/* Create form */}
       {showForm && (
         <div className="card" style={{ padding: '24px 28px', marginBottom: 24, border: '1.5px solid var(--blue)' }}>
-          <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 800, color: 'var(--navy)', marginBottom: 18 }}>Create New Admin User</h3>
+          <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 800, color: 'var(--navy)', marginBottom: 10 }}>Create New Admin User</h3>
+          <p style={{ color: 'var(--text-3)', fontSize: 12, marginBottom: 16 }}>Staff accounts are created from the Staff page instead of this tab.</p>
           <form onSubmit={handleCreate}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
               <div className="form-field">
                 <label>Full Name <span className="req">*</span></label>
                 <input className="form-input" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} required placeholder="John Adeyemi" />
+              </div>
+              <div className="form-field">
+                <label>Username <span style={{ fontSize: 11, color: 'var(--text-3)' }}>(optional)</span></label>
+                <input className="form-input" value={form.username} onChange={e => setForm(p => ({ ...p, username: e.target.value }))} placeholder="johnade" />
               </div>
               <div className="form-field">
                 <label>Email Address <span className="req">*</span></label>
@@ -126,6 +131,7 @@ export default function AdminUsers() {
           <table className="data-table">
             <thead>
               <tr>
+                <th>Username</th>
                 <th>Name</th>
                 <th>Email</th>
                 <th>Role</th>
@@ -141,6 +147,7 @@ export default function AdminUsers() {
                 const isMe = a.id === currentAdmin?.id;
                 return (
                   <tr key={a.id}>
+                    <td style={{ fontSize: 13, color: 'var(--text-2)' }}>{a.username}</td>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <div style={{ width: 32, height: 32, borderRadius: '50%', background: roleCfg.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: roleCfg.color }}>
