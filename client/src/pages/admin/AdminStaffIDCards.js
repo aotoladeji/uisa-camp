@@ -4,13 +4,6 @@ import Barcode from 'react-barcode';
 import { Printer, Search, CheckSquare, Square, RefreshCcw } from 'lucide-react';
 import api from '../../utils/api';
 
-const escapeHtml = (value = '') => String(value)
-  .replace(/&/g, '&amp;')
-  .replace(/</g, '&lt;')
-  .replace(/>/g, '&gt;')
-  .replace(/"/g, '&quot;')
-  .replace(/'/g, '&#39;');
-
 export default function AdminStaffIDCards() {
   const [staff, setStaff] = useState([]);
   const [query, setQuery] = useState('');
@@ -68,6 +61,13 @@ export default function AdminStaffIDCards() {
       toast.error('Select at least one staff card to print');
       return;
     }
+
+    const itemsToPrint = ids && ids.length ? staff.filter(item => ids.includes(item.id)) : staff;
+    if (!itemsToPrint.length) {
+      toast.error('No staff cards available to print');
+      return;
+    }
+
     setPrintIds(ids);
     setTimeout(() => window.print(), 120);
   };
@@ -75,10 +75,11 @@ export default function AdminStaffIDCards() {
   const shouldHideInPrint = (id) => Array.isArray(printIds) && !printIds.includes(id);
 
   const getIdNumber = (item) => `UISTA-${new Date().getFullYear()}-${String(item.id).padStart(4, '0')}`;
+  const resolveAccent = (item) => String(item?.theme_color || '#0F766E').trim() || '#0F766E';
 
   const renderCardPreview = (item) => {
     const idNumber = getIdNumber(item);
-    const accent = item.theme_color || '#0F766E';
+    const accent = resolveAccent(item);
     const photoFallback = (item.full_name || 'Staff').split(' ').map(part => part[0]).slice(0, 2).join('').toUpperCase();
 
     return (
@@ -117,6 +118,7 @@ export default function AdminStaffIDCards() {
       </div>
     );
   };
+
 
   const printCard = (item) => {
     const printWindow = window.open('', '_blank', 'width=900,height=650');

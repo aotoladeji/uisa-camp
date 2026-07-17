@@ -504,46 +504,4 @@ input, select, textarea { font-family: inherit; }
   .id-card-template {
     box-shadow: none;
   }
-
-  .id-card-header {
-    background: #051d4c !important;
-  }
-
-  .id-card-header::after {
-    background: #ffffff !important;
-    border-top-color: #35b8c8 !important;
-  }
-
-  .id-card-photo {
-    border-color: #35b8c8 !important;
-  }
-
-  .id-card-company,
-  .id-card-logo,
-  .id-card-tagline,
-  .id-card-name,
-  .id-card-role,
-  .id-card-details span,
-  .id-card-details b {
-    color: inherit !important;
-  }
-
-  .id-card-company,
-  .id-card-logo,
-  .id-card-tagline {
-    color: #ffffff !important;
-  }
-
-  .id-card-name {
-    color: #0b325a !important;
-  }
-
-  .id-card-role,
-  .id-card-details span {
-    color: #2fa7ba !important;
-  }
-
-  .id-card-details b {
-    color: #1f2f44 !important;
-  }
 }
