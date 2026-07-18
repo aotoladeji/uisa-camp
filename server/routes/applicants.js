@@ -566,9 +566,9 @@ router.get('/stats/summary', authenticate, async (req, res) => {
   }
 });
 
-// ─── GET /api/applicants/letter  (public: download admission letter as PDF) ──
+// ─── GET /api/applicants/letter  (public: view/download admission letter) ──
 router.get('/letter', async (req, res) => {
-  const { form, sig } = req.query;
+  const { form, sig, format } = req.query;
   if (!form || !sig) {
     return res.status(400).send('<html><body style="font-family:sans-serif;padding:40px"><p>Invalid link.</p></body></html>');
   }
@@ -596,131 +596,238 @@ router.get('/letter', async (req, res) => {
     const fullName = [a.first_name, a.middle_name, a.surname].filter(Boolean).join(' ');
     const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 
-    const PDFDocument = require('pdfkit');
-    const doc = new PDFDocument({
-      size: 'A4',
-      margin: 56,
-      info: {
-        Title:   `Admission Letter – ${a.form_number}`,
-        Author:  'University of Ibadan Sports Academy',
-        Subject: '2026 Summer Sports Camp – Official Admission',
-      },
-    });
+    // If format=pdf, generate PDF directly
+    if (format === 'pdf') {
+      const PDFDocument = require('pdfkit');
+      const doc = new PDFDocument({
+        size: 'A4',
+        margin: 56,
+        info: {
+          Title:   `Admission Letter – ${a.form_number}`,
+          Author:  'University of Ibadan Sports Academy',
+          Subject: '2026 Summer Sports Camp – Official Admission',
+        },
+      });
 
-    const filename = `Admission-Letter-${(a.form_number || form).replace(/[^A-Za-z0-9-]/g, '-')}.pdf`;
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    doc.pipe(res);
+      const filename = `Admission-Letter-${(a.form_number || form).replace(/[^A-Za-z0-9-]/g, '-')}.pdf`;
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      doc.pipe(res);
 
-    const navy = '#0A3D62';
-    const lm   = 56;
-    const w    = doc.page.width - lm * 2;  // ≈ 483
+      const navy = '#0A3D62';
+      const lm   = 56;
+      const w    = doc.page.width - lm * 2;  // ≈ 483
 
-    // ── HEADER ────────────────────────────────────────────────────────────
-    doc.fontSize(16).fillColor(navy).font('Helvetica-Bold')
-       .text('UNIVERSITY OF IBADAN SPORTS ACADEMY', lm, 56, { width: w, align: 'center' });
-    doc.fontSize(11).fillColor('#334155').font('Helvetica')
-       .text('Official Admission Offer  \u00b7  2026 Summer Sports Camp', { width: w, align: 'center' });
-    doc.moveDown(0.5);
-    const ruleY = doc.y;
-    doc.moveTo(lm, ruleY).lineTo(lm + w, ruleY).lineWidth(2).strokeColor(navy).stroke();
-    doc.moveDown(1.4);
+      // ── HEADER ────────────────────────────────────────────────────────────
+      doc.fontSize(16).fillColor(navy).font('Helvetica-Bold')
+         .text('UNIVERSITY OF IBADAN SPORTS ACADEMY', lm, 56, { width: w, align: 'center' });
+      doc.fontSize(11).fillColor('#334155').font('Helvetica')
+         .text('Official Admission Offer  \u00b7  2026 Summer Sports Camp', { width: w, align: 'center' });
+      doc.moveDown(0.5);
+      const ruleY = doc.y;
+      doc.moveTo(lm, ruleY).lineTo(lm + w, ruleY).lineWidth(2).strokeColor(navy).stroke();
+      doc.moveDown(1.4);
 
-    // ── TITLE + SALUTATION ────────────────────────────────────────────────
-    doc.fontSize(18).fillColor(navy).font('Helvetica-Bold')
-       .text('Offer of Official Admission', { width: w });
-    doc.moveDown(0.8);
+      // ── TITLE + SALUTATION ────────────────────────────────────────────────
+      doc.fontSize(18).fillColor(navy).font('Helvetica-Bold')
+         .text('Offer of Official Admission', { width: w });
+      doc.moveDown(0.8);
 
-    doc.fontSize(12).fillColor('#111827');
-    doc.font('Helvetica').text('Date:  ', { continued: true })
-       .font('Helvetica-Bold').text(today, { width: w });
-    doc.moveDown(0.3);
-    doc.font('Helvetica').text('Dear ', { continued: true })
-       .font('Helvetica-Bold').text(`${a.guardian_name || 'Parent/Guardian'},`, { width: w });
-    doc.moveDown(0.7);
+      doc.fontSize(12).fillColor('#111827');
+      doc.font('Helvetica').text('Date:  ', { continued: true })
+         .font('Helvetica-Bold').text(today, { width: w });
+      doc.moveDown(0.3);
+      doc.font('Helvetica').text('Dear ', { continued: true })
+         .font('Helvetica-Bold').text(`${a.guardian_name || 'Parent/Guardian'},`, { width: w });
+      doc.moveDown(0.7);
 
-    // ── BODY PARAGRAPHS ───────────────────────────────────────────────────
-    doc.font('Helvetica').fontSize(12).lineGap(3).fillColor('#111827');
-    doc.text('We are pleased to inform you that ', { continued: true })
-       .font('Helvetica-Bold').text(fullName, { continued: true })
-       .font('Helvetica').text(' has been officially admitted into the University of Ibadan Sports Academy 2026 Summer Sports Camp.', { width: w });
-    doc.moveDown(0.4);
-    doc.text('This admission follows the successful review of the application, verification of payment, and approval of all submitted documentation.', { width: w });
-    doc.moveDown(1);
+      // ── BODY PARAGRAPHS ───────────────────────────────────────────────────
+      doc.font('Helvetica').fontSize(12).lineGap(3).fillColor('#111827');
+      doc.text('We are pleased to inform you that ', { continued: true })
+         .font('Helvetica-Bold').text(fullName, { continued: true })
+         .font('Helvetica').text(' has been officially admitted into the University of Ibadan Sports Academy 2026 Summer Sports Camp.', { width: w });
+      doc.moveDown(0.4);
+      doc.text('This admission follows the successful review of the application, verification of payment, and approval of all submitted documentation.', { width: w });
+      doc.moveDown(1);
 
-    // ── INFO TABLE ────────────────────────────────────────────────────────
-    const tableRows = [
-      ['Applicant Name',  fullName],
-      ['Form Number',     a.form_number],
-      ['Sport',           a.sport_selection  || '\u2014'],
-      ['Category',        a.age_category     || '\u2014'],
-      ['Training Group',  a.group_assigned   || 'TBA'],
-      ['Assigned Coach',  a.coach_assigned   || 'TBA'],
-      ['Accommodation',   a.room_number      || 'TBA'],
-      ['Camp Period',     'August 3 \u2013 August 28, 2026'],
-      ['Resumption',      'Monday, August 3, 2026  \u00b7  7:00 AM \u2013 9:00 AM'],
-      ['Venue',           'International School, University of Ibadan'],
-    ];
+      // ── INFO TABLE ────────────────────────────────────────────────────────
+      const tableRows = [
+        ['Applicant Name',  fullName],
+        ['Form Number',     a.form_number],
+        ['Sport',           a.sport_selection  || '\u2014'],
+        ['Category',        a.age_category     || '\u2014'],
+        ['Training Group',  a.group_assigned   || 'TBA'],
+        ['Assigned Coach',  a.coach_assigned   || 'TBA'],
+        ['Accommodation',   a.room_number      || 'TBA'],
+        ['Camp Period',     'August 3 \u2013 August 28, 2026'],
+        ['Resumption',      'Monday, August 3, 2026  \u00b7  7:00 AM \u2013 9:00 AM'],
+        ['Venue',           'International School, University of Ibadan'],
+      ];
 
-    const rowH   = 24;
-    const labelW = 190;
-    let ty = doc.y;
+      const rowH   = 24;
+      const labelW = 190;
+      let ty = doc.y;
 
-    // outer border
-    doc.rect(lm, ty, w, rowH * tableRows.length)
-       .lineWidth(1).strokeColor('#D1D5DB').stroke();
+      // outer border
+      doc.rect(lm, ty, w, rowH * tableRows.length)
+         .lineWidth(1).strokeColor('#D1D5DB').stroke();
 
-    tableRows.forEach(([label, value], i) => {
-      const bg = i % 2 === 0 ? '#F8FAFC' : '#FFFFFF';
-      doc.rect(lm, ty, w, rowH).fillColor(bg).fill();
-      if (i > 0) {
-        doc.moveTo(lm, ty).lineTo(lm + w, ty)
+      tableRows.forEach(([label, value], i) => {
+        const bg = i % 2 === 0 ? '#F8FAFC' : '#FFFFFF';
+        doc.rect(lm, ty, w, rowH).fillColor(bg).fill();
+        if (i > 0) {
+          doc.moveTo(lm, ty).lineTo(lm + w, ty)
+             .lineWidth(0.5).strokeColor('#E5E7EB').stroke();
+        }
+        doc.moveTo(lm + labelW, ty).lineTo(lm + labelW, ty + rowH)
            .lineWidth(0.5).strokeColor('#E5E7EB').stroke();
-      }
-      doc.moveTo(lm + labelW, ty).lineTo(lm + labelW, ty + rowH)
-         .lineWidth(0.5).strokeColor('#E5E7EB').stroke();
-      doc.fillColor('#374151').font('Helvetica-Bold').fontSize(10)
-         .text(label, lm + 8, ty + 7, { width: labelW - 16, lineBreak: false });
-      doc.fillColor('#111827').font('Helvetica').fontSize(10)
-         .text(value, lm + labelW + 8, ty + 7, { width: w - labelW - 16, lineBreak: false });
-      ty += rowH;
-    });
+        doc.fillColor('#374151').font('Helvetica-Bold').fontSize(10)
+           .text(label, lm + 8, ty + 7, { width: labelW - 16, lineBreak: false });
+        doc.fillColor('#111827').font('Helvetica').fontSize(10)
+           .text(value, lm + labelW + 8, ty + 7, { width: w - labelW - 16, lineBreak: false });
+        ty += rowH;
+      });
 
-    // advance cursor past the table
-    doc.text('', lm, ty + 18);
+      // advance cursor past the table
+      doc.text('', lm, ty + 18);
 
-    // ── CLOSING ───────────────────────────────────────────────────────────
-    doc.font('Helvetica').fontSize(12).lineGap(3).fillColor('#111827');
-    doc.text('Kindly present this letter along with proof of payment and all required documents on arrival.', { width: w });
-    doc.moveDown(0.4);
-    doc.text('We look forward to welcoming ', { continued: true })
-       .font('Helvetica-Bold').text(fullName, { continued: true })
-       .font('Helvetica').text(' to an exciting month of sports, learning and personal development.', { width: w });
-    doc.moveDown(0.4);
-    doc.font('Helvetica-Oblique').fillColor(navy)
-       .text('Developing Champions in Sports and Character.', { width: w });
-    doc.moveDown(2.5);
+      // ── CLOSING ───────────────────────────────────────────────────────────
+      doc.font('Helvetica').fontSize(12).lineGap(3).fillColor('#111827');
+      doc.text('Kindly present this letter along with proof of payment and all required documents on arrival.', { width: w });
+      doc.moveDown(0.4);
+      doc.text('We look forward to welcoming ', { continued: true })
+         .font('Helvetica-Bold').text(fullName, { continued: true })
+         .font('Helvetica').text(' to an exciting month of sports, learning and personal development.', { width: w });
+      doc.moveDown(0.4);
+      doc.font('Helvetica-Oblique').fillColor(navy)
+         .text('Developing Champions in Sports and Character.', { width: w });
+      doc.moveDown(2.5);
 
-    // ── SIGNATURE ─────────────────────────────────────────────────────────
-    const sigY = doc.y;
-    doc.moveTo(lm, sigY).lineTo(lm + 200, sigY)
-       .lineWidth(1).strokeColor('#111827').stroke();
-    doc.moveDown(0.5);
-    doc.font('Helvetica').fillColor('#374151').fontSize(11)
-       .text('Camp Director', { width: w })
-       .text('University of Ibadan Sports Academy', { width: w });
+      // ── SIGNATURE ─────────────────────────────────────────────────────────
+      const sigY = doc.y;
+      doc.moveTo(lm, sigY).lineTo(lm + 200, sigY)
+         .lineWidth(1).strokeColor('#111827').stroke();
+      doc.moveDown(0.5);
+      doc.font('Helvetica').fillColor('#374151').fontSize(11)
+         .text('Camp Director', { width: w })
+         .text('University of Ibadan Sports Academy', { width: w });
 
-    // ── FOOTER ────────────────────────────────────────────────────────────
-    doc.fontSize(9).fillColor('#9CA3AF')
-       .text(
-         '\u00a9 2026 University of Ibadan Sports Academy  \u00b7  Ibadan, Nigeria  \u00b7  +234 803 687 0535',
-         lm, doc.page.height - 46,
-         { width: w, align: 'center', lineBreak: false }
-       );
+      // ── FOOTER ────────────────────────────────────────────────────────────
+      doc.fontSize(9).fillColor('#9CA3AF')
+         .text(
+           '\u00a9 2026 University of Ibadan Sports Academy  \u00b7  Ibadan, Nigeria  \u00b7  +234 803 687 0535',
+           lm, doc.page.height - 46,
+           { width: w, align: 'center', lineBreak: false }
+         );
 
-    doc.end();
+      doc.end();
+      return;
+    }
+
+    // Otherwise, serve HTML page with download button
+    const downloadUrl = `/api/applicants/letter?form=${encodeURIComponent(form)}&sig=${sig}&format=pdf`;
+    const htmlPage = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Official Admission Offer - ${a.form_number}</title>
+  <style>
+    body { font-family: Georgia, 'Times New Roman', serif; margin: 0; background: #f4f7f9; color: #111827; }
+    .page { max-width: 720px; margin: 30px auto; background: #fff; border: 1px solid #e1e8ed; border-radius: 8px; overflow: hidden; }
+    .header { background: #0A3D62; padding: 28px 36px; }
+    .header-org { color: #fff; font-family: Arial, sans-serif; font-weight: 800; font-size: 20px; }
+    .header-sub { color: rgba(255,255,255,0.7); font-family: Arial, sans-serif; font-size: 13px; margin-top: 4px; }
+    .body { padding: 36px; }
+    h1 { font-family: Arial, sans-serif; color: #0A3D62; font-size: 22px; margin: 0 0 20px; }
+    h2 { font-family: Arial, sans-serif; color: #0A3D62; font-size: 16px; margin: 24px 0 10px; border-bottom: 1px solid #e5e7eb; padding-bottom: 6px; }
+    p { font-size: 15px; line-height: 1.7; margin: 0 0 14px; }
+    .info { margin: 20px 0; border: 1px solid #e5e7eb; border-radius: 6px; overflow: hidden; }
+    .row { display: table; width: 100%; border-bottom: 1px solid #e5e7eb; }
+    .row:last-child { border-bottom: 0; }
+    .lbl { display: table-cell; width: 45%; padding: 10px 14px; background: #f9fafb; font-family: Arial, sans-serif; font-weight: 700; font-size: 13px; color: #374151; }
+    .val { display: table-cell; padding: 10px 14px; font-family: Arial, sans-serif; font-size: 13px; color: #111827; }
+    .badge-green { display: inline-block; background: #f0fff4; color: #16a34a; font-weight: 700; padding: 2px 10px; border-radius: 9999px; font-size: 12px; }
+    .checklist { margin: 8px 0 0; padding-left: 20px; font-size: 14px; line-height: 1.8; }
+    .sign { margin-top: 36px; border-top: 1px solid #d1d5db; padding-top: 10px; font-family: Arial, sans-serif; font-size: 14px; color: #374151; }
+    .footer { padding: 16px 36px; text-align: center; color: #9ca3af; font-family: Arial, sans-serif; font-size: 12px; background: #f9fafb; border-top: 1px solid #e5e7eb; }
+    .btn-wrap { text-align: center; margin: 28px 0 8px; }
+    .btn { display: inline-block; background: #0A3D62; color: #fff; font-family: Arial, sans-serif; font-weight: 700; font-size: 14px; padding: 12px 32px; border-radius: 6px; text-decoration: none; cursor: pointer; letter-spacing: .3px; border: none; }
+    .btn:hover { background: #0c4e7a; }
+    .btn-secondary { background: #fff; color: #0A3D62; border: 2px solid #0A3D62; margin-left: 10px; }
+    .btn-secondary:hover { background: #f0f4f8; }
+    @media print {
+      body { background: #fff; }
+      .page { margin: 0; border: none; border-radius: 0; box-shadow: none; }
+      .btn-wrap { display: none; }
+      .header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+      <div class="header-org">UNIVERSITY OF IBADAN SPORTS ACADEMY</div>
+      <div class="header-sub">Official Admission Offer · 2026 Summer Sports Camp</div>
+    </div>
+    <div class="body">
+      <h1>Congratulations! Admission Offered 🏆</h1>
+      <p>Dear <strong>${a.guardian_name}</strong>,</p>
+      <p>We are delighted to inform you that <strong>${fullName}</strong> has been offered admission into the 2026 University of Ibadan Sports Academy Summer Camp.</p>
+      <p>Following the successful review of the application and verification of all required documentation, the applicant has been selected to participate in this year's camp programme. This admission reflects our confidence in the applicant's potential and our commitment to supporting the development of young athletes in both sports performance and character.</p>
+
+      <div class="info">
+        <div class="row"><div class="lbl">Form Number</div><div class="val">${a.form_number}</div></div>
+        <div class="row"><div class="lbl">Participant</div><div class="val">${fullName}</div></div>
+        <div class="row"><div class="lbl">Sport</div><div class="val">${a.sport_selection || '—'}</div></div>
+        <div class="row"><div class="lbl">Camp Period</div><div class="val">August 3 – Aug 28, 2026</div></div>
+        <div class="row"><div class="lbl">Venue</div><div class="val">International School, Univ. of Ibadan</div></div>
+        <div class="row"><div class="lbl">Training Group</div><div class="val">${a.group_assigned || 'TBA'}</div></div>
+        <div class="row"><div class="lbl">Assigned Coach</div><div class="val">${a.coach_assigned || 'TBA'}</div></div>
+        <div class="row"><div class="lbl">Accommodation</div><div class="val">${a.room_number || 'TBA'}</div></div>
+        <div class="row"><div class="lbl">Admission Status</div><div class="val"><span class="badge-green">Admitted</span></div></div>
+      </div>
+
+      <h2>Arrival Information</h2>
+      <p>Participants are expected to arrive on <strong>Monday, August 3, 2026</strong> between 7:00 AM and 9:00 AM for registration, orientation, and camp allocation.</p>
+
+      <div class="info">
+        <div class="row"><div class="lbl" colspan="2" style="width:100%;font-size:13px;font-weight:700;">Please come along with:</div></div>
+        <div class="row"><div class="val" style="padding:10px 14px;">
+          <ul class="checklist">
+            <li>Printed official admission letter</li>
+            <li>Proof of payment</li>
+            <li>Medical information (if applicable)</li>
+            <li>Any sport-specific equipment required</li>
+          </ul>
+        </div></div>
+      </div>
+
+      <h2>Important Notice</h2>
+      <p>This admission is valid for the 2026 Summer Camp session only. Participants are expected to comply with all camp rules, safety regulations, and the code of conduct throughout the programme.</p>
+      <p>We look forward to welcoming <strong>${fullName}</strong> to an exciting month of learning, competition, teamwork, discipline, and personal development.</p>
+      <p style="font-style:italic;color:#0A3D62;font-weight:700;">Developing Champions in Sports and Character.</p>
+
+      <div class="sign">Camp Director</div>
+
+      <div class="btn-wrap">
+        <a href="${downloadUrl}" class="btn" download>⬇ Download as PDF</a>
+        <button onclick="window.print()" class="btn btn-secondary">🖨 Print Letter</button>
+      </div>
+    </div>
+    <div class="footer">
+      <p>&copy; 2026 University of Ibadan Sports Academy</p>
+      <p>Ibadan, Nigeria | +234 803 687 0535</p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+    res.setHeader('Content-Type', 'text/html');
+    res.send(htmlPage);
+
   } catch (err) {
-    console.error('Letter PDF error:', err);
+    console.error('Letter error:', err);
     if (!res.headersSent) {
       res.status(500).send('<html><body style="font-family:sans-serif;padding:40px"><p>An error occurred. Please try again later.</p></body></html>');
     }

@@ -196,31 +196,8 @@ const templates = {
       <div class="sign">Camp Director</div>
 
       <div class="print-btn-wrap">
-        <button onclick="downloadAsPDF()" class="print-btn">⬇ Save / Print as PDF</button>
+        <a href="${buildLetterUrl(data.form_number)}" class="print-btn">⬇ View & Download Letter</a>
       </div>
-      
-      <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-      <script>
-        function downloadAsPDF() {
-          const element = document.querySelector('.page');
-          const opt = {
-            margin:       0,
-            filename:     'Admission-Letter-${data.form_number.replace(/[^A-Za-z0-9-]/g, '-')}.pdf',
-            image:        { type: 'jpeg', quality: 0.98 },
-            html2canvas:  { scale: 2, useCORS: true, letterRendering: true },
-            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
-          };
-          
-          // Hide the button before generating PDF
-          const btnWrap = document.querySelector('.print-btn-wrap');
-          btnWrap.style.display = 'none';
-          
-          html2pdf().set(opt).from(element).save().then(() => {
-            // Show the button again after PDF is generated
-            btnWrap.style.display = 'block';
-          });
-        }
-      </script>
     </div>
     <div class="footer">
       <p>&copy; 2026 University of Ibadan Sports Academy</p>
